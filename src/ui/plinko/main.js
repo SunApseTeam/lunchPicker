@@ -311,8 +311,8 @@ if (new URLSearchParams(location.search).has('debug')) {
 new ResizeObserver(() => renderer.resize()).observe(canvas);
 window.addEventListener('resize', () => renderer.resize());
 
+// Today's candidates start empty: the team picks where it feels like going each day.
 await loadMenus();
-for (const m of menus) if (!m.hidden) candidateIds.add(m.id);
 rebuildBoard();
 renderMenus();
 settingsDialog.render();
