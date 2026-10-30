@@ -9,6 +9,7 @@ import {
   minSlotWidth,
   mulberry32,
   physicsFrom,
+  randomBumpers,
 } from '../src/domain/physics.js';
 import { createRound, stepRound } from '../src/domain/round.js';
 
@@ -103,4 +104,25 @@ test('once a ball sits deep in a slot the result follows within about a second',
     lags.push(t - deepSince);
   }
   assert.ok(Math.max(...lags) < 1.2, `slowest wait after landing ${Math.max(...lags).toFixed(2)}s`);
+});
+
+test('every round can get its own bumper layout, and none of them traps a ball', () => {
+  const layouts = new Set();
+  for (let seed = 1; seed <= 30; seed++) {
+    const bumpers = randomBumpers(mulberry32(seed));
+    layouts.add(JSON.stringify(bumpers));
+    assert.equal(bumpers.length, 6);
+    for (const a of bumpers) {
+      assert.ok(a.row >= 1 && a.row <= 6, `bumper row ${a.row}`);
+      for (const b of bumpers) {
+        if (a !== b) assert.ok(Math.abs(a.row - b.row) > 1 || Math.abs(a.x - b.x) > 190, 'bumpers do not touch');
+      }
+    }
+    const board = createBoard(equalWidths(6), physics.radius, bumpers);
+    assert.equal(board.pegs.filter((p) => p.kind === 'bumper').length, 6);
+    const round = createRound(board, 3, mulberry32(seed), physics);
+    for (let i = 0; i < 90 / DT && !round.done; i++) stepRound(round);
+    assert.ok(round.done, `layout ${seed} finished`);
+  }
+  assert.ok(layouts.size > 25, `${layouts.size} different layouts`);
 });

@@ -1,6 +1,6 @@
 import { createLunchService } from '../../application/lunch.js';
 import { todayString } from '../../domain/date.js';
-import { DT, createBoard, equalWidths, maxSlots, physicsFrom } from '../../domain/physics.js';
+import { DT, createBoard, equalWidths, maxSlots, physicsFrom, randomBumpers } from '../../domain/physics.js';
 import { createRound, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
@@ -29,7 +29,8 @@ let menus = [];
 const candidateIds = new Set();
 let pickCount = 1;
 let slotMenus = [];
-let board = createBoard(equalWidths(2), settings.size);
+let bumpers = randomBumpers(Math.random);
+let board = createBoard(equalWidths(2), settings.size, bumpers);
 
 // idle: board ready. running: balls in flight. result: winners shown, waiting for 확정 or 다시.
 let phase = { name: 'idle', round: null };
@@ -58,7 +59,8 @@ function shuffle(list) {
 // Slot indices in a finished round point into slotMenus, so only rebuild while idle.
 // Slots are not equally likely (bumpers and walls shape where balls land), so fairness comes
 // from the shuffle: every menu is equally likely to sit in every slot. Every new round
-// reshuffles; a rename, icon or size change keeps today's order when the candidates are the same.
+// reshuffles the menus and moves the bumpers; a rename, icon or size change keeps today's
+// order when the candidates are the same.
 function rebuildBoard({ reshuffle = false } = {}) {
   if (phase.name !== 'idle') return;
   const next = candidatesValid() ? candidates() : null;
@@ -66,7 +68,8 @@ function rebuildBoard({ reshuffle = false } = {}) {
   if (!next) slotMenus = [{ name: '?' }, { name: '?' }];
   else if (same && !reshuffle) slotMenus = slotMenus.map((s) => next.find((m) => m.id === s.id));
   else slotMenus = shuffle(next);
-  board = createBoard(equalWidths(slotMenus.length), settings.size);
+  if (reshuffle) bumpers = randomBumpers(Math.random);
+  board = createBoard(equalWidths(slotMenus.length), settings.size, bumpers);
   pickCount = Math.min(pickCount, maxPick());
 }
 

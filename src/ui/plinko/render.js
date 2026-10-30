@@ -12,6 +12,12 @@ const MUTED = '#8a8c9c';
 const ACCENT = '#f96262';
 const PINK = '#ff4d7d';
 
+// Measured in simulated rounds: knocks run from about 100 (a graze) to 1000+ (a straight drop
+// onto a peg), and the fastest tenth of falling is above 750.
+const SCARED_SPEED = 750;
+const knockStrength = (speed) => Math.min(1, Math.max(0, (speed - 100) / 800));
+const winceTime = (strength) => 0.2 + 0.3 * strength;
+
 function hexToRgba(hex, alpha) {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
@@ -21,6 +27,7 @@ export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   const camera = createCamera();
   const flash = new Map();
+  const ouch = new WeakMap();
   const particles = [];
   let width = 0;
   let height = 0;
@@ -43,10 +50,21 @@ export function createRenderer(canvas) {
     }
   }
 
+  // A softer knock never cuts a bigger wince short.
+  function hurt(ball, speed, now) {
+    const strength = knockStrength(speed);
+    const prev = ouch.get(ball);
+    if (prev && now - prev.at < winceTime(prev.strength) && prev.strength > strength) return;
+    ouch.set(ball, { at: now, strength });
+  }
+
   function onEvent(event, now) {
     if (event.type === 'hit') {
+      hurt(event.ball, event.speed, now);
+      // Ball-on-ball knocks (plain contact or a slot bounce) hurt both.
+      if (event.target?.pts) hurt(event.target, event.speed, now);
       if (event.target) flash.set(event.target, now);
-      if (event.kind === 'bumper') burst(event.target.x, event.target.y, PINK, 12, 380);
+      if (event.kind === 'bumper') burst(event.target.x, event.target.y, PINK, 20, 520);
     } else if (event.type === 'redrop') {
       burst(event.ball.cx, event.ball.cy, MUTED, 24, 320);
     }
@@ -127,15 +145,7 @@ export function createRenderer(canvas) {
     for (const peg of board.pegs) {
       const glow = Math.max(0, 1 - (now - (flash.get(peg) ?? -10)) / 0.35);
       if (peg.kind === 'bumper') {
-        const pulse = 1 + 0.35 * Math.max(0, 1 - (now - (flash.get(peg) ?? -10)) / 0.2);
-        ctx.fillStyle = hexToRgba(PINK, 0.2 + 0.4 * glow);
-        ctx.beginPath();
-        ctx.arc(peg.x, peg.y, peg.r * 1.9 * pulse, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = PINK;
-        ctx.beginPath();
-        ctx.arc(peg.x, peg.y, peg.r * pulse, 0, Math.PI * 2);
-        ctx.fill();
+        drawBumper(peg, now - (flash.get(peg) ?? -10), now, glow);
         continue;
       }
       if (glow > 0) {
@@ -152,6 +162,33 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
+  // A hit bumper springs: it pops big, then wobbles back while a ring rolls outward.
+  // At rest it breathes a little so it reads as something different from a peg.
+  function drawBumper(peg, since, now, glow) {
+    const spring = since < 1 ? 0.7 * Math.exp(-5 * since) * Math.cos(24 * since) : 0;
+    const scale = 1 + spring + 0.06 * Math.sin(now * 3 + peg.x);
+    if (since < 0.45) {
+      const t = since / 0.45;
+      ctx.strokeStyle = hexToRgba(PINK, 0.6 * (1 - t));
+      ctx.lineWidth = 6 * (1 - t) + 1;
+      ctx.beginPath();
+      ctx.arc(peg.x, peg.y, peg.r * (1.6 + 3.4 * t), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = hexToRgba(PINK, 0.2 + 0.4 * glow);
+    ctx.beginPath();
+    ctx.arc(peg.x, peg.y, peg.r * 1.9 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = PINK;
+    ctx.beginPath();
+    ctx.arc(peg.x, peg.y, peg.r * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.beginPath();
+    ctx.arc(peg.x - peg.r * 0.3 * scale, peg.y - peg.r * 0.35 * scale, peg.r * 0.28 * scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   function blobPath(pts) {
     const n = pts.length;
     const mid = (i) => ({ x: (pts[i].x + pts[(i + 1) % n].x) / 2, y: (pts[i].y + pts[(i + 1) % n].y) / 2 });
@@ -165,7 +202,7 @@ export function createRenderer(canvas) {
     ctx.closePath();
   }
 
-  function drawBall(b) {
+  function drawBall(b, now) {
     const color = BALL_COLORS[(b.id - 1) % BALL_COLORS.length];
     blobPath(b.pts);
     const g = ctx.createRadialGradient(b.cx - b.R * 0.35, b.cy - b.R * 0.45, b.R * 0.1, b.cx, b.cy, b.R * 1.15);
@@ -181,26 +218,114 @@ export function createRenderer(canvas) {
     ctx.strokeStyle = 'rgba(20, 21, 31, 0.35)';
     ctx.stroke();
 
-    // The face squints when the body is squashed hard.
-    const cos = Math.cos(b.angle);
-    const sin = Math.sin(b.angle);
-    const squint = Math.min(1, Math.max(0, (b.squeeze - 0.08) * 5));
+    drawFace(b, now);
+  }
+
+  // A wince after every knock, wide eyes when falling fast, a grin once resting in a slot.
+  function moodOf(b, now) {
+    const o = ouch.get(b);
+    if (o && now - o.at < winceTime(o.strength)) return { mood: 'ouch', strength: o.strength };
+    if (b.settled) return { mood: 'happy' };
+    if (b.zone === null && Math.hypot(b.vx, b.vy) > SCARED_SPEED) return { mood: 'scared' };
+    return { mood: 'calm' };
+  }
+
+  function drawFace(b, now) {
+    const { mood, strength = 0 } = moodOf(b, now);
+    const R = b.R;
+    const ex = R * 0.3;
+    const ey = -R * 0.08;
+    const my = R * 0.26;
+    ctx.save();
+    ctx.translate(b.cx, b.cy);
+    // The face only tilts as the body rolls: a ball resting upside down should still read.
+    ctx.rotate(0.4 * Math.sin(b.angle));
+    ctx.fillStyle = mood === 'calm' || mood === 'scared' ? 'rgba(255, 107, 107, 0.45)' : 'rgba(255, 77, 125, 0.6)';
     for (const side of [-1, 1]) {
-      const ex = side * b.R * 0.3;
-      const ey = -b.R * 0.08;
-      ctx.save();
-      ctx.translate(b.cx + ex * cos - ey * sin, b.cy + ex * sin + ey * cos);
-      ctx.rotate(b.angle);
-      ctx.fillStyle = INK;
       ctx.beginPath();
-      ctx.ellipse(0, 0, b.R * 0.085, b.R * 0.12 * (1 - squint * 0.8), 0, 0, Math.PI * 2);
+      ctx.ellipse(side * R * 0.42, R * 0.12, R * 0.12, R * 0.06, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255, 107, 107, 0.45)';
-      ctx.beginPath();
-      ctx.ellipse(side * b.R * 0.12, b.R * 0.2, b.R * 0.12, b.R * 0.06, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
     }
+    ctx.fillStyle = INK;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = R * 0.07;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    for (const side of [-1, 1]) {
+      const x = side * ex;
+      ctx.beginPath();
+      if (mood === 'ouch') {
+        // > < : each chevron points at the nose.
+        const w = R * 0.08;
+        const h = R * (0.07 + 0.04 * strength);
+        ctx.moveTo(x + side * w, ey - h);
+        ctx.lineTo(x - side * w, ey);
+        ctx.lineTo(x + side * w, ey + h);
+        ctx.stroke();
+      } else if (mood === 'happy') {
+        ctx.arc(x, ey + R * 0.05, R * 0.09, Math.PI * 1.15, Math.PI * 1.85);
+        ctx.stroke();
+      } else if (mood === 'scared') {
+        ctx.ellipse(x, ey, R * 0.1, R * 0.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(x + R * 0.03, ey - R * 0.05, R * 0.035, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = INK;
+      } else {
+        ctx.ellipse(x, ey, R * 0.085, R * 0.12, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.beginPath();
+    if (mood === 'ouch' && strength > 0.55) {
+      // Gritted teeth for the hard knocks.
+      const w = R * 0.2;
+      const h = R * 0.15;
+      ctx.roundRect(-w, my - h / 2, w * 2, h, h * 0.4);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.lineWidth = R * 0.05;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-w, my);
+      ctx.lineTo(w, my);
+      for (const tx of [-w / 3, w / 3]) {
+        ctx.moveTo(tx, my - h / 2);
+        ctx.lineTo(tx, my + h / 2);
+      }
+      ctx.stroke();
+      drawSweat(R * 0.55, -R * 0.42, R * 0.13);
+    } else if (mood === 'ouch') {
+      const w = R * 0.18;
+      const a = R * 0.05;
+      ctx.moveTo(-w, my);
+      for (let i = 1; i <= 4; i++) ctx.lineTo(-w + (w / 2) * i, my + (i % 2 ? -a : a));
+      ctx.stroke();
+    } else if (mood === 'happy') {
+      ctx.arc(0, my - R * 0.06, R * 0.17, 0, Math.PI);
+      ctx.closePath();
+      ctx.fill();
+    } else if (mood === 'scared') {
+      ctx.ellipse(0, my + R * 0.02, R * 0.07, R * 0.09, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.arc(0, my - R * 0.1, R * 0.11, Math.PI * 0.2, Math.PI * 0.8);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawSweat(x, y, s) {
+    ctx.fillStyle = '#5ab8ff';
+    ctx.beginPath();
+    ctx.moveTo(x, y - s);
+    ctx.quadraticCurveTo(x + s * 0.7, y, x, y + s * 0.6);
+    ctx.quadraticCurveTo(x - s * 0.7, y, x, y - s);
+    ctx.fill();
   }
 
   function drawParticles(dt) {
@@ -226,7 +351,7 @@ export function createRenderer(canvas) {
     ctx.clearRect(0, 0, width, height);
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - camera.x * s), dpr * (height / 2 - camera.y * s));
     drawBoard(board, slotMenus, winners, now);
-    for (const b of balls) drawBall(b);
+    for (const b of balls) drawBall(b, now);
     drawParticles(dt);
   }
 

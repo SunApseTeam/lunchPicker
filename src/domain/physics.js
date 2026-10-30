@@ -10,7 +10,7 @@ const SKIN = 4;
 const MERGE_LIMIT = 0.6;
 const SLOT_MARGIN = 24;
 const MAX_SLOT_BOUNCES = 2;
-const BUMPER_KICK = 1100;
+const BUMPER_KICK = 1700;
 const PEG_SCATTER = 150;
 const AIR_DRAG = 0.9995;
 const PEG_RESTITUTION = 0.7;
@@ -39,7 +39,7 @@ export const GEOMETRY = {
   wallBumpRadius: 45,
   dividerHalfWidth: 4,
 };
-const BUMPERS = ['1:410', '1:790', '3:600', '5:220', '5:980', '6:505'];
+const BUMPER_COUNT = 6;
 
 export function physicsFrom(settings) {
   const soft = settings.softness / 100;
@@ -67,20 +67,45 @@ export function equalWidths(n) {
   return Array.from({ length: n }, () => GEOMETRY.width / n);
 }
 
-function buildPegs(g) {
+// Even rows leave 116px to the wall, wider than a ball. Odd rows stop well short of the
+// wall and get a half-round bump centred on it, which always pushes balls inward:
+// any gap narrower than a ball between a peg and the wall becomes a pocket.
+function pegColumns(g, row) {
+  const first = row % 2 === 1 ? 125 + g.colGap / 2 : 125;
+  const xs = [];
+  for (let x = first; x <= g.width - first + 1; x += g.colGap) xs.push(x);
+  return xs;
+}
+
+// Each round gets its own bumper layout. Bumpers skip the top row (straight under the drop)
+// and the bottom one (just over the slots), and an even row's outermost peg: a bumper there
+// narrows the wall gap below a big ball. No two bumpers touch, so their kicks never stack.
+export function randomBumpers(rng) {
+  const g = GEOMETRY;
+  const spots = [];
+  for (let row = 1; row < g.pegRows - 1; row++) {
+    for (const x of pegColumns(g, row)) {
+      if (row % 2 === 1 || (x > 125 && x < g.width - 125)) spots.push({ row, x });
+    }
+  }
+  const picked = [];
+  while (picked.length < BUMPER_COUNT && spots.length > 0) {
+    const [spot] = spots.splice(Math.floor(rng() * spots.length), 1);
+    if (picked.some((p) => Math.abs(p.row - spot.row) <= 1 && Math.abs(p.x - spot.x) <= g.colGap)) continue;
+    picked.push(spot);
+  }
+  return picked;
+}
+
+function buildPegs(g, bumpers) {
   const pegs = [];
   for (let row = 0; row < g.pegRows; row++) {
     const y = g.pegTop + row * g.rowGap;
-    const odd = row % 2 === 1;
-    // Even rows leave 116px to the wall, wider than a ball. Odd rows stop well short of the
-    // wall and get a half-round bump centred on it, which always pushes balls inward:
-    // any gap narrower than a ball between a peg and the wall becomes a pocket.
-    const first = odd ? 125 + g.colGap / 2 : 125;
-    for (let x = first; x <= g.width - first + 1; x += g.colGap) {
-      const bumper = BUMPERS.includes(`${row}:${x}`);
+    for (const x of pegColumns(g, row)) {
+      const bumper = bumpers.some((b) => b.row === row && b.x === x);
       pegs.push({ x, y, r: bumper ? g.bumperRadius : g.pegRadius, kind: bumper ? 'bumper' : 'peg' });
     }
-    if (odd) {
+    if (row % 2 === 1) {
       pegs.push({ x: 0, y, r: g.wallBumpRadius, kind: 'wall' });
       pegs.push({ x: g.width, y, r: g.wallBumpRadius, kind: 'wall' });
     }
@@ -88,7 +113,12 @@ function buildPegs(g) {
   return pegs;
 }
 
-export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size) {
+// The layout the simulation tests run on.
+export const FIXED_BUMPERS = [
+  { row: 1, x: 410 }, { row: 1, x: 790 }, { row: 3, x: 600 }, { row: 5, x: 220 }, { row: 5, x: 980 }, { row: 6, x: 505 },
+];
+
+export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers = FIXED_BUMPERS) {
   const g = GEOMETRY;
   const total = slotWidths.reduce((a, b) => a + b, 0);
   const slotEdges = [0];
@@ -98,7 +128,7 @@ export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size) {
   const pegBottom = g.pegTop + (g.pegRows - 1) * g.rowGap;
   const dividerTop = pegBottom + 100;
   const floorY = dividerTop + 80;
-  const pegs = buildPegs(g);
+  const pegs = buildPegs(g, bumpers);
   const caps = dividers.map((x) => ({ x, y: dividerTop, r: g.dividerHalfWidth, kind: 'divider' }));
   return {
     ...g,

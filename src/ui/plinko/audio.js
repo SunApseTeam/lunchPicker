@@ -41,6 +41,32 @@ export function createAudio() {
     osc.stop(at + decay + 0.02);
   }
 
+  // A spring: a falling pitch that wobbles as it dies away.
+  function boing(at, pan) {
+    const osc = ctx.createOscillator();
+    const wobble = ctx.createOscillator();
+    const depth = ctx.createGain();
+    const amp = ctx.createGain();
+    const panner = ctx.createStereoPanner();
+    const decay = 0.5;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(560, at);
+    osc.frequency.exponentialRampToValueAtTime(240, at + decay);
+    wobble.frequency.setValueAtTime(15, at);
+    depth.gain.setValueAtTime(140, at);
+    depth.gain.exponentialRampToValueAtTime(4, at + decay);
+    wobble.connect(depth).connect(osc.frequency);
+    amp.gain.setValueAtTime(0.0001, at);
+    amp.gain.exponentialRampToValueAtTime(0.38, at + 0.006);
+    amp.gain.exponentialRampToValueAtTime(0.0001, at + decay);
+    panner.pan.value = pan;
+    osc.connect(amp).connect(panner).connect(master);
+    for (const o of [osc, wobble]) {
+      o.start(at);
+      o.stop(at + decay + 0.02);
+    }
+  }
+
   function thump(freq, gain, decay, pan) {
     const src = ctx.createBufferSource();
     const filter = ctx.createBiquadFilter();
@@ -81,7 +107,7 @@ export function createAudio() {
         const step = Math.round((1 - x / boardWidth) * 9);
         voice('triangle', noteFreq(step), 0.05 + 0.18 * loud, 0.16, now, pan);
       } else if (kind === 'bumper') {
-        voice('sine', 720, 0.35, 0.28, now, pan, 160);
+        boing(now, pan);
         voice('square', 180, 0.06, 0.12, now, pan);
       } else if (kind === 'slotBounce') {
         voice('sine', 260, 0.4, 0.4, now, pan, 900);
