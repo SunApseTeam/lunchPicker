@@ -14,13 +14,20 @@ const BUMPER_KICK = 1700;
 const PEG_SCATTER = 150;
 const AIR_DRAG = 0.9995;
 const PEG_RESTITUTION = 0.7;
+// The slot floor is springy, and the dividers are lower than a ball is tall, so about half the
+// balls bounce out of the slot they land in first (measured over single drops). Landings slower
+// than FLOOR_MIN_SPEED (a ball already resting and jiggling) get no bounce, so a settled ball
+// stays put.
+const FLOOR_RESTITUTION = 0.6;
+const FLOOR_MIN_SPEED = 150;
+const DIVIDER_PER_RADIUS = 0.75;
 
 const SETTLE_RADIUS = 5;
 const SETTLE_TIME = 0.35;
 const SHAKE_RADIUS = 10;
 const SHAKE_TIME = 0.8;
-// Once a ball is in a slot the outcome is decided, so its jiggle and sloshing die down fast and
-// a slow ball counts as settled sooner, instead of waiting out every tremor of the jelly.
+// Once a ball has stopped bouncing in a slot, its jiggle and sloshing die down fast and it counts
+// as settled sooner, instead of waiting out every tremor of the jelly.
 const SLOT_WOBBLE_DAMPING = 0.98;
 const SLOT_DRAG = 0.985;
 const CALM_SPEED = 80;
@@ -126,8 +133,10 @@ export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers 
   slotEdges[slotEdges.length - 1] = g.width;
   const dividers = slotEdges.slice(1, -1);
   const pegBottom = g.pegTop + (g.pegRows - 1) * g.rowGap;
-  const dividerTop = pegBottom + 100;
-  const floorY = dividerTop + 80;
+  const floorY = pegBottom + 180;
+  // Dividers are lower than a ball is tall, in proportion to it, so balls of every size can
+  // bounce over them about as often.
+  const dividerTop = floorY - radius * DIVIDER_PER_RADIUS;
   const pegs = buildPegs(g, bumpers);
   const caps = dividers.map((x) => ({ x, y: dividerTop, r: g.dividerHalfWidth, kind: 'divider' }));
   return {
@@ -573,18 +582,25 @@ function scatter(world, b) {
 // Position projection stops a ball dead against a peg, so it slides around pegs instead of
 // bouncing off them and the path follows the peg layout. On a fresh contact, part of the
 // incoming speed is handed back outward along the contact normal.
-function rebound(b, ob) {
-  const dx = b.cx - ob.x;
-  const dy = b.cy - ob.y;
-  const d = Math.hypot(dx, dy) || 1e-6;
-  const nx = dx / d;
-  const ny = dy / d;
+function rebound(b, nx, ny, restitution) {
   const vn = b.inVx * nx + b.inVy * ny;
   if (vn >= 0) return;
-  const push = -vn * PEG_RESTITUTION * DT;
+  const push = -vn * restitution * DT;
   for (const p of b.pts) {
     p.px -= nx * push;
     p.py -= ny * push;
+  }
+}
+
+// When the floor is first touched only the skin's underside has stopped; the rest of the body
+// is still falling. The whole ball leaves upward at the restitution share of its landing speed
+// and keeps its sideways speed, like a rubber ball.
+function bounceOffFloor(b) {
+  const dvx = b.inVx - b.vx;
+  const dvy = -FLOOR_RESTITUTION * b.inVy - b.vy;
+  for (const p of b.pts) {
+    p.px -= dvx * DT;
+    p.py -= dvy * DT;
   }
 }
 
@@ -595,7 +611,8 @@ function emitContacts(world, emit, before) {
     for (const ob of b.touching) {
       if (before.get(b)?.has(ob)) continue;
       if (ob.kind === 'peg' || ob.kind === 'wall') {
-        rebound(b, ob);
+        const d = Math.hypot(b.cx - ob.x, b.cy - ob.y) || 1e-6;
+        rebound(b, (b.cx - ob.x) / d, (b.cy - ob.y) / d, PEG_RESTITUTION);
         scatter(world, b);
       }
       if (speed > 60) {
@@ -603,6 +620,12 @@ function emitContacts(world, emit, before) {
       }
     }
     const onFloor = b.bottom >= board.floorY - POINT_R - 0.5;
+    if (onFloor && !b.onFloor && b.inVy > FLOOR_MIN_SPEED) {
+      bounceOffFloor(b);
+      scatter(world, b);
+      // The jelly squashes and springs back over the next moments; slot damping would eat that.
+      b.bounceAt = world.time;
+    }
     if (onFloor && !b.onFloor && speed > 60) emit({ type: 'hit', kind: 'floor', ball: b, speed, nx: 0, ny: -1 });
     b.onFloor = onFloor;
   }

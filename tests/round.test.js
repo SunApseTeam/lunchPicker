@@ -66,12 +66,12 @@ test('the candidate cap keeps every equal-width slot wide enough for a ball', ()
 
 test('the landing slot does not simply follow the starting position', () => {
   const n = 8;
-  const board = createBoard(equalWidths(n), physics.radius);
   const rng = mulberry32(99);
   const starts = [];
   const ends = [];
+  // As in the game, every drop gets its own bumper layout.
   for (let i = 0; i < 150; i++) {
-    const round = createRound(board, 1, rng, physics);
+    const round = createRound(createBoard(equalWidths(n), physics.radius, randomBumpers(rng)), 1, rng, physics);
     starts.push(round.world.balls[0].cx);
     for (let s = 0; s < 40 / DT && !round.done; s++) stepRound(round);
     ends.push(round.world.balls[0].cx);
@@ -85,25 +85,41 @@ test('the landing slot does not simply follow the starting position', () => {
   assert.ok(Math.abs(corr) < 0.3, `start/landing correlation ${corr.toFixed(2)} is weak`);
 });
 
-test('once a ball sits deep in a slot the result follows within about a second', () => {
+test('once a ball stops bouncing in a slot the result follows within about a second', () => {
   const board = createBoard(equalWidths(8), physics.radius);
   const lags = [];
   for (let seed = 1; seed <= 30; seed++) {
     const round = createRound(board, 1, mulberry32(seed), physics);
     let t = 0;
-    let deepSince = null;
+    let lastBounce = 0;
     for (let i = 0; i < 30 / DT && !round.done; i++) {
       stepRound(round);
       t += DT;
       const ball = round.world.balls[0];
-      const deep = ball.zone !== null && ball.bottom > board.dividerTop + 40;
-      if (!deep) deepSince = null;
-      else deepSince ??= t;
+      if (ball.zone === null || Math.hypot(ball.vx, ball.vy) > 200) lastBounce = t;
     }
     assert.ok(round.done, `drop ${seed} finished`);
-    lags.push(t - deepSince);
+    lags.push(t - lastBounce);
   }
-  assert.ok(Math.max(...lags) < 1.2, `slowest wait after landing ${Math.max(...lags).toFixed(2)}s`);
+  assert.ok(Math.max(...lags) < 1.2, `slowest wait after the last bounce ${Math.max(...lags).toFixed(2)}s`);
+});
+
+test('a landed ball often bounces on into another slot', () => {
+  let landed = 0;
+  let moved = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const rng = mulberry32(seed);
+    const round = createRound(createBoard(equalWidths(6), physics.radius, randomBumpers(rng)), 1, rng, physics);
+    const ball = round.world.balls[0];
+    let first = null;
+    for (let i = 0; i < 30 / DT && !round.done; i++) {
+      stepRound(round);
+      if (first === null && ball.onFloor) first = ball.zone;
+    }
+    landed += 1;
+    if (round.winners[0] !== first) moved += 1;
+  }
+  assert.ok(moved / landed > 0.3 && moved / landed < 0.7, `${moved} of ${landed} balls moved on from their first slot`);
 });
 
 test('every round can get its own bumper layout, and none of them traps a ball', () => {
