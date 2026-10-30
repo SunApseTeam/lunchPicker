@@ -70,6 +70,8 @@
     .hbars .track { height: 14px; }
     .hbars .bar { display: block; height: 100%; min-width: 4px; background: var(--accent); border-radius: 0 4px 4px 0; }
     .hbars .val { font-weight: 700; min-width: 2.5em; text-align: right; }
+    .hbars .bar.tag { background: var(--mint); }
+    .note { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
 
     .stale li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
     .stale li:last-child { border-bottom: 0; }
@@ -158,6 +160,11 @@
         <h2>월별</h2>
         <p class="hint">최근 6개월</p>
         <div id="months"></div>
+      </section>
+      <section class="card wide">
+        <h2>태그별</h2>
+        <p class="hint">태그마다 간 횟수. 태그가 여러 개인 가게는 각 태그에 한 번씩 세요</p>
+        <div id="tags"></div>
       </section>
       <section class="card wide">
         <h2>기록</h2>

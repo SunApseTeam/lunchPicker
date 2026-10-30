@@ -77,3 +77,18 @@ test('timeline lists the newest day first', () => {
   assert.equal(stats.timeline[0].visitedOn, '2026-10-28');
   assert.equal(stats.timeline.at(-1).visitedOn, '2026-05-04');
 });
+
+test('visits add up per tag, counting a place once for each of its tags', () => {
+  const tagged = [
+    { id: 'a', name: '이도곰탕', hidden: false, tags: ['한식', '국밥'] },
+    { id: 'b', name: '도이', hidden: false, tags: ['중식'] },
+    { id: 'c', name: '김밥천국', hidden: false, tags: [] },
+  ];
+  const s = computeStats(
+    tagged,
+    [visit('a', '2026-10-26'), visit('a', '2026-10-27'), visit('b', '2026-10-27'), visit('b', '2026-10-28', { canceled: true }), visit('c', '2026-10-28')],
+    '2026-10-30',
+  );
+  assert.deepEqual(s.tags, [{ tag: '국밥', count: 2 }, { tag: '한식', count: 2 }, { tag: '중식', count: 1 }]);
+  assert.equal(s.untaggedVisits, 1);
+});

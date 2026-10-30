@@ -1,13 +1,14 @@
-// Each menu shows an emoji: the one someone picked, or else a guess from its name.
+// Each menu shows an emoji: the one someone picked, or else a guess from its tags, then its name
+// (a place's name often says nothing about its food: 도이, 끝장).
 // Rules are checked in order, so specific words come before the general ones they contain
 // (마라탕 before 탕, 국수 before 국, 탕수육 before 탕).
 const RULES = [
   [['마라'], '🌶️'],
   [['탕수육', '중식', '중국', '반점', '딤섬'], '🥡'],
   [['만두', '교자'], '🥟'],
-  [['파스타', '스파게티'], '🍝'],
+  [['파스타', '스파게티', '양식'], '🍝'],
   [['라멘', '라면', '우동', '국수', '짜장', '짬뽕', '냉면', '소바', '면'], '🍜'],
-  [['초밥', '스시', '사시미', '회'], '🍣'],
+  [['초밥', '스시', '사시미', '일식', '회'], '🍣'],
   [['카레', '커리'], '🍛'],
   [['김밥', '주먹밥', '오니기리'], '🍙'],
   [['떡볶이', '분식', '어묵', '오뎅'], '🍢'],
@@ -24,6 +25,7 @@ const RULES = [
   [['죽'], '🥣'],
   [['브런치', '토스트', '오믈렛'], '🍳'],
   [['빵', '베이글', '베이커리'], '🥯'],
+  [['카페', '커피'], '☕'],
   [['생선', '고등어', '연어'], '🐟'],
   [['해물', '해산물', '조개', '낙지', '쭈꾸미', '주꾸미'], '🦐'],
   [['도시락', '정식', '백반', '한식'], '🍱'],
@@ -43,7 +45,12 @@ export function guessIcon(name) {
 }
 
 export function menuIcon(menu) {
-  return menu.icon ?? guessIcon(menu.name);
+  if (menu.icon) return menu.icon;
+  for (const tag of menu.tags ?? []) {
+    const icon = guessIcon(tag);
+    if (icon !== DEFAULT_ICON) return icon;
+  }
+  return guessIcon(menu.name);
 }
 
 export function checkIcon(icon) {

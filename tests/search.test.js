@@ -41,3 +41,19 @@ test('closer matches rank first', () => {
   assert.equal(matchScore('김치찌개', '피자'), null);
   assert.equal(searchMenus(menus, '').length, menus.length);
 });
+
+test('a tag finds the place, ranked a half step behind the same match on a name', () => {
+  const places = [
+    { id: 'a', name: '도이', tags: ['중식'] },
+    { id: 'b', name: '노모어피자', tags: ['피자'] },
+    { id: 'c', name: '피자헛', tags: [] },
+    { id: 'd', name: '역삼라멘', tags: ['라멘', '일식'] },
+  ];
+  const ids = (q) => searchMenus(places, q).map((m) => m.id);
+  assert.deepEqual(ids('중식'), ['a']);
+  assert.deepEqual(ids('ㅈㅅ'), ['a']);
+  // An exact tag beats a name that only starts with the word.
+  assert.deepEqual(ids('피자'), ['b', 'c']);
+  assert.deepEqual(ids('라멘'), ['d']);
+  assert.deepEqual(ids('일식'), ['d']);
+});

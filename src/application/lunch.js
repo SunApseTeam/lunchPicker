@@ -1,13 +1,14 @@
 import { checkIcon } from '../domain/icon.js';
 import { DEFAULT_MENUS, normalizeMenuName } from '../domain/menu.js';
 import { computeStats } from '../domain/stats.js';
+import { checkTags } from '../domain/tag.js';
 
 // Use cases for both pages. The store is a plain row store; every rule lives here or in domain/.
 //
 // Store port (see infrastructure/ for the localStorage and Supabase adapters):
-//   listMenus()               -> [{ id, name, hidden, icon, createdAt }]  (icon may be missing)
-//   insertMenus(names)        -> the inserted menus
-//   updateMenu(id, patch)     patch: { name }, { hidden } or { icon }
+//   listMenus()               -> [{ id, name, hidden, icon, tags, createdAt }]  (icon may be missing)
+//   insertMenus(rows)         rows: [{ name, tags }] -> the inserted menus
+//   updateMenu(id, patch)     patch: { name }, { hidden }, { icon } or { tags }
 //   listVisits()              -> [{ id, menuId, visitedOn, source, canceled, createdAt }]
 //   insertVisits(rows)        rows: [{ menuId, visitedOn, source: 'spin' | 'manual' }]
 //   updateVisit(id, patch)    patch: { canceled }
@@ -27,7 +28,7 @@ export function createLunchService(store, today) {
     listMenus,
 
     async addMenu(name) {
-      const [menu] = await store.insertMenus([normalizeMenuName(name, await store.listMenus())]);
+      const [menu] = await store.insertMenus([{ name: normalizeMenuName(name, await store.listMenus()), tags: [] }]);
       return menu;
     },
 
@@ -39,9 +40,13 @@ export function createLunchService(store, today) {
       return store.updateMenu(id, { hidden });
     },
 
-    // null clears a picked icon so the menu goes back to the one guessed from its name.
+    // null clears a picked icon so the menu goes back to the one guessed from its tags and name.
     setMenuIcon(id, icon) {
       return store.updateMenu(id, { icon: checkIcon(icon) });
+    },
+
+    async setMenuTags(id, tags) {
+      return store.updateMenu(id, { tags: checkTags(tags) });
     },
 
     // Every winner of a round is recorded: the team splits up and goes to all of them.

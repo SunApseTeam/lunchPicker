@@ -45,6 +45,24 @@ export function renderRanking(ranking) {
     .join('')}</ul>`;
 }
 
+export function renderTags(tags, untaggedVisits) {
+  if (tags.length === 0) return '<p class="empty">아직 태그가 달린 가게의 기록이 없어요. 플링코 화면에서 가게 옆 # 버튼으로 태그를 달 수 있어요.</p>';
+  const max = tags[0].count;
+  const rows = tags
+    .map((t) => {
+      const place = 1 + tags.filter((o) => o.count > t.count).length;
+      return `<li title="#${escapeHtml(t.tag)}: ${t.count}번">
+        <span class="rank">${place}</span>
+        <span class="name">#${escapeHtml(t.tag)}</span>
+        <span class="track"><span class="bar tag" style="width:${(t.count / max) * 100}%"></span></span>
+        <span class="val">${t.count}번</span>
+      </li>`;
+    })
+    .join('');
+  const note = untaggedVisits > 0 ? `<p class="note">태그 없는 가게에 간 ${untaggedVisits}번은 빠져 있어요</p>` : '';
+  return `<ul class="hbars">${rows}</ul>${note}`;
+}
+
 export function renderStale(stale) {
   return `<ul class="stale">${stale
     .slice(0, STALE_SHOWN)
@@ -99,7 +117,7 @@ export function renderTimeline(days) {
 
 export function renderMenuOptions(menus) {
   return (
-    '<option value="">메뉴 선택</option>' +
+    '<option value="">가게 선택</option>' +
     menus
       .filter((m) => !m.hidden)
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))

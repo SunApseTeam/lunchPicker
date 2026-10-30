@@ -2,7 +2,7 @@
 // build step or client library. The row policies in supabase/schema.sql decide what anon may do.
 const PAGE = 1000;
 
-const toMenu = (r) => ({ id: r.id, name: r.name, hidden: r.hidden, icon: r.icon ?? null, createdAt: r.created_at });
+const toMenu = (r) => ({ id: r.id, name: r.name, hidden: r.hidden, icon: r.icon ?? null, tags: r.tags ?? [], createdAt: r.created_at });
 const toVisit = (r) => ({
   id: r.id,
   menuId: r.menu_id,
@@ -48,10 +48,10 @@ export function createSupabaseStore(url, key) {
     async listMenus() {
       return (await getAll('menus?select=*&order=created_at.asc,name.asc')).map(toMenu);
     },
-    async insertMenus(names) {
+    async insertMenus(menus) {
       const rows = await request('menus', {
         method: 'POST',
-        body: names.map((name) => ({ name })),
+        body: menus.map(({ name, tags }) => ({ name, tags })),
         prefer: 'return=representation',
       });
       return rows.map(toMenu);

@@ -77,6 +77,14 @@ export function createRenderer(canvas) {
     }
   }
 
+  // Cuts text to fit the width in the current font, ending it with an ellipsis.
+  function fitText(text, max) {
+    if (ctx.measureText(text).width <= max) return text;
+    let cut = text;
+    while (cut.length > 1 && ctx.measureText(`${cut}…`).width > max) cut = cut.slice(0, -1);
+    return `${cut}…`;
+  }
+
   function drawBoard(board, slotMenus, winners, now) {
     ctx.fillStyle = '#e9e6dd';
     ctx.beginPath();
@@ -113,19 +121,25 @@ export function createRenderer(canvas) {
         size -= 2;
         ctx.font = `700 ${size}px "IBM Plex Sans KR", sans-serif`;
       }
-      let label = slotMenus[i].name;
-      while (ctx.measureText(label).width > max && label.length > 1) label = label.slice(0, -1);
-      if (label !== slotMenus[i].name) label = label.slice(0, -1) + '…';
+      const label = fitText(slotMenus[i].name, max);
       ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const cx = (x0 + x1) / 2;
       const mid = (board.floorY + board.height) / 2;
+      const tags = slotMenus[i].tags ?? [];
       // The placeholder slots shown before enough menus are picked have no id and no icon.
       if (slotMenus[i].id) {
-        ctx.fillText(label, cx, mid + 16);
+        // Tags take a third line under the name, so the icon and name move up to make room.
+        const lift = tags.length > 0 ? 10 : 0;
+        ctx.fillText(label, cx, mid + 16 - lift);
+        if (tags.length > 0) {
+          ctx.font = '500 15px "IBM Plex Sans KR", sans-serif';
+          ctx.fillStyle = 'rgba(28, 29, 38, 0.62)';
+          ctx.fillText(fitText(tags.map((t) => `#${t}`).join(' '), max), cx, mid + 31);
+        }
         ctx.font = `${Math.min(38, max * 0.55)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
-        ctx.fillText(menuIcon(slotMenus[i]), cx, mid - 18);
+        ctx.fillText(menuIcon(slotMenus[i]), cx, mid - 18 - lift);
       } else {
         ctx.fillText(label, cx, mid);
       }

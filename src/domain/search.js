@@ -1,4 +1,4 @@
-// Menu search tuned for Korean typing. A query matches a name by any of:
+// Menu search tuned for Korean typing. A query matches a name or one of its tags by any of:
 //   plain text      "찌개" in 김치찌개, ignoring case and spaces
 //   initials        "ㄱㅊㅉㄱ" or "ㄱㅊ" for 김치찌개
 //   unfinished      "김ㅊ", "짜자" while the IME is still composing a syllable
@@ -74,10 +74,18 @@ export function matchScore(name, query) {
   return null;
 }
 
+// A tag hit ranks just behind the same kind of hit on the name.
+function menuScore(menu, query) {
+  const scores = [matchScore(menu.name, query), ...(menu.tags ?? []).map((t) => matchScore(t, query))]
+    .map((s, i) => (s === null ? null : s + (i > 0 ? 0.5 : 0)))
+    .filter((s) => s !== null);
+  return scores.length > 0 ? Math.min(...scores) : null;
+}
+
 // Matching menus, best first; ties keep the list's own order.
 export function searchMenus(menus, query) {
   return menus
-    .map((menu, i) => ({ menu, i, score: matchScore(menu.name, query) }))
+    .map((menu, i) => ({ menu, i, score: menuScore(menu, query) }))
     .filter((r) => r.score !== null)
     .sort((a, b) => a.score - b.score || a.i - b.i)
     .map((r) => r.menu);

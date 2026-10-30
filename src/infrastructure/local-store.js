@@ -41,12 +41,13 @@ export function createLocalStore() {
   return {
     async listMenus() {
       fresh();
-      return state.menus.map((m) => ({ ...m }));
+      // Menus saved before tags existed have none.
+      return state.menus.map((m) => ({ tags: [], ...m }));
     },
-    async insertMenus(names) {
+    async insertMenus(menus) {
       fresh();
       const createdAt = new Date().toISOString();
-      return insert(state.menus, names.map((name) => ({ id: newId(), name, hidden: false, createdAt })));
+      return insert(state.menus, menus.map(({ name, tags }) => ({ id: newId(), name, hidden: false, tags, createdAt })));
     },
     async updateMenu(id, patch) {
       fresh();

@@ -194,6 +194,31 @@
     #icon-picker .grid button { font-size: 24px; padding: 8px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
     #icon-picker .grid button:hover, #icon-picker .grid button.on { border-color: var(--accent); background: #fff1f0; }
     #icon-picker-auto { background: none; border: 1px solid var(--line); color: var(--muted); }
+    .info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .info .name { flex: none; }
+    .row-tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 2px 2px; background: none; border: 0; text-align: left; }
+    .row-tags span, .chips li, .chips button {
+      font-size: 11px; line-height: 1; padding: 4px 7px; border-radius: 999px;
+      background: #e6f6f4; color: var(--mint-text); border: 0;
+    }
+    .tag-btn { flex: none; width: 28px; height: 28px; border: 1px dashed var(--line); border-radius: 8px; background: none; color: var(--muted); font-weight: 700; padding: 0; }
+    .tag-btn:hover { color: var(--mint-text); border-color: var(--mint); }
+    #tag-editor { width: min(420px, calc(100vw - 32px)); }
+    .tag-body { padding: 10px 22px 0; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
+    .chips li, .chips button { font-size: 14px; padding: 6px 10px; display: inline-flex; align-items: center; gap: 4px; }
+    .chips li button { background: none; padding: 0 2px; font-size: 14px; color: inherit; opacity: .7; }
+    .chips li button:hover { opacity: 1; }
+    #tag-suggest button { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+    #tag-suggest button:hover { border-color: var(--mint); color: var(--mint-text); }
+    #tag-current:empty::before { content: "아직 태그가 없어요"; color: var(--muted); font-size: 13px; align-self: center; }
+    #tag-form { display: flex; gap: 8px; margin: 14px 0 6px; }
+    #tag-input { flex: 1; min-width: 0; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; }
+    #tag-input:focus { outline: 2px solid var(--mint); border-color: transparent; }
+    #tag-form button { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 0 14px; font-weight: 700; }
+    .tag-label { margin: 12px 0 8px; color: var(--muted); font-size: 12px; }
+    .tag-note { color: var(--muted); font-size: 12px; align-self: center; }
+    #tag-editor-close { background: var(--yellow); color: var(--ink); border: 0; flex: none; }
     .credit { color: var(--muted); font-size: 12px; }
     .credit b { color: var(--text); font-weight: 700; }
     .search { position: relative; display: block; margin-bottom: 6px; }
@@ -271,17 +296,17 @@
       <h2>오늘 후보 <span><b id="candidate-count">0</b>개</span></h2>
       <label class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="menu-search" type="search" autocomplete="off" placeholder="검색 · 초성 ㄱㅊ · 줄임말 김찌" aria-label="메뉴 검색">
+        <input id="menu-search" type="search" autocomplete="off" placeholder="가게·태그 검색 · 초성 ㅇㄷ · 줄임말 노피" aria-label="가게 검색">
       </label>
       <ul id="menu-list"></ul>
-      <p id="search-empty" class="search-empty" hidden><span></span><button type="button" id="search-add" class="ghost">메뉴로 추가</button></p>
+      <p id="search-empty" class="search-empty" hidden><span></span><button type="button" id="search-add" class="ghost">가게로 추가</button></p>
       <form id="add-form" autocomplete="off">
-        <input id="add-input" maxlength="20" placeholder="메뉴 추가" aria-label="새 메뉴 이름">
+        <input id="add-input" maxlength="20" placeholder="가게 추가" aria-label="새 가게 이름">
         <button type="submit">추가</button>
       </form>
     </section>
     <details id="hidden-wrap" hidden>
-      <summary>숨긴 메뉴 <span id="hidden-count">0</span>개</summary>
+      <summary>숨긴 가게 <span id="hidden-count">0</span>개</summary>
       <ul id="hidden-list"></ul>
     </details>
     <section class="controls">
@@ -343,7 +368,28 @@
     </header>
     <div class="grid" id="icon-picker-grid"></div>
     <footer class="dialog-foot">
-      <button id="icon-picker-auto">이름으로 자동</button>
+      <button id="icon-picker-auto">태그·이름으로 자동</button>
+    </footer>
+  </dialog>
+  <dialog id="tag-editor" aria-labelledby="tag-editor-title">
+    <header class="dialog-head">
+      <h2 id="tag-editor-title">태그</h2>
+      <button id="tag-editor-dismiss" class="icon" aria-label="닫기" title="닫기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+    <div class="tag-body">
+      <ul class="chips" id="tag-current"></ul>
+      <form id="tag-form" autocomplete="off">
+        <input id="tag-input" maxlength="40" placeholder="태그 입력 후 Enter · 쉼표로 여러 개" aria-label="새 태그">
+        <button type="submit">추가</button>
+      </form>
+      <p class="tag-label" id="tag-suggest-label">다른 가게에 쓴 태그</p>
+      <div class="chips" id="tag-suggest"></div>
+    </div>
+    <footer class="dialog-foot">
+      <span class="tag-note">태그는 없어도 돼요. 검색과 아이콘, 통계에 쓰여요</span>
+      <button id="tag-editor-close">완료</button>
     </footer>
   </dialog>
   <div id="toast" role="status" aria-live="polite"></div>

@@ -2,10 +2,10 @@ import { menuIcon } from '../../domain/icon.js';
 import { searchMenus } from '../../domain/search.js';
 import { $, escapeHtml } from '../shared/dom.js';
 
-// The menu list in the sidebar: today's candidate checkboxes, inline rename, hide/unhide and
-// the add form, filtered by the search box. It owns only the rename and search state; everything
-// else comes from main.
-export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd, onIcon }) {
+// The place list in the sidebar: today's candidate checkboxes, inline rename, tags, hide/unhide
+// and the add form, filtered by the search box. It owns only the rename and search state;
+// everything else comes from main.
+export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd, onIcon, onTags }) {
   let editingId = null;
   let query = '';
   let last = { menus: [], candidateIds: new Set() };
@@ -19,12 +19,16 @@ export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd, o
         const checked = candidateIds.has(m.id) ? 'checked' : '';
         const name =
           editingId === m.id
-            ? `<input class="rename" data-id="${m.id}" value="${escapeHtml(m.name)}" maxlength="20" aria-label="메뉴 이름 수정">`
+            ? `<input class="rename" data-id="${m.id}" value="${escapeHtml(m.name)}" maxlength="20" aria-label="가게 이름 수정">`
             : `<button class="name" data-action="edit" data-id="${m.id}" title="눌러서 이름 수정">${escapeHtml(m.name)}</button>`;
+        const tags = m.tags.length
+          ? `<button class="row-tags" data-action="tags" data-id="${m.id}" title="태그 편집">${m.tags.map((t) => `<span>#${escapeHtml(t)}</span>`).join('')}</button>`
+          : '';
         return `<li class="${checked ? '' : 'off'}">
         <label class="check"><input type="checkbox" data-action="toggle" data-id="${m.id}" ${checked} aria-label="${escapeHtml(m.name)} 오늘 후보"><span></span></label>
         <button class="icon-btn" data-action="icon" data-id="${m.id}" title="아이콘 바꾸기" aria-label="${escapeHtml(m.name)} 아이콘 바꾸기">${menuIcon(m)}</button>
-        ${name}
+        <div class="info">${name}${tags}</div>
+        <button class="tag-btn" data-action="tags" data-id="${m.id}" title="태그 달기" aria-label="${escapeHtml(m.name)} 태그 편집">#</button>
         <button class="ghost" data-action="hide" data-id="${m.id}" title="숨기기">숨김</button>
       </li>`;
       })
@@ -34,7 +38,7 @@ export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd, o
     if (query && hidden.length > 0) $('#hidden-wrap').open = true;
     const nothing = Boolean(query) && visible.length === 0 && hidden.length === 0;
     $('#search-empty').hidden = !nothing;
-    if (nothing) $('#search-empty span').textContent = `'${query.trim()}' 메뉴가 없어요`;
+    if (nothing) $('#search-empty span').textContent = `'${query.trim()}' 가게가 없어요`;
     $('#hidden-list').innerHTML = hidden
       .map((m) => `<li><span class="icon-btn" aria-hidden="true">${menuIcon(m)}</span><span class="name">${escapeHtml(m.name)}</span><button class="ghost" data-action="unhide" data-id="${m.id}">다시 보이기</button></li>`)
       .join('');
@@ -60,6 +64,8 @@ export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd, o
       onHide(target.dataset.id);
     } else if (target.dataset.action === 'icon') {
       onIcon(last.menus.find((m) => m.id === target.dataset.id));
+    } else if (target.dataset.action === 'tags') {
+      onTags(last.menus.find((m) => m.id === target.dataset.id));
     }
   });
 

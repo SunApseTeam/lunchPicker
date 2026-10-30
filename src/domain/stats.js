@@ -61,6 +61,19 @@ export function computeStats(menus, visits, today) {
     months.push({ key, label: `${(index % 12) + 1}월`, count: inMonth.length, top: leader(inMonth, names) });
   }
 
+  // A visit counts once for each tag its place has now; places without tags are counted apart.
+  const tagsOf = new Map(menus.map((m) => [m.id, m.tags ?? []]));
+  const tagCount = new Map();
+  let untaggedVisits = 0;
+  for (const v of active) {
+    const tags = tagsOf.get(v.menuId) ?? [];
+    if (tags.length === 0) untaggedVisits += 1;
+    for (const t of tags) tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
+  }
+  const tags = [...tagCount]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'ko'));
+
   const timeline = visits
     .map((v) => ({ ...v, name: names.get(v.menuId) ?? '?', icon: icons.get(v.menuId) }))
     .sort((a, b) => b.visitedOn.localeCompare(a.visitedOn) || b.createdAt.localeCompare(a.createdAt));
@@ -72,6 +85,8 @@ export function computeStats(menus, visits, today) {
     stale,
     weekdays: weekdayRows,
     months,
+    tags,
+    untaggedVisits,
     timeline,
   };
 }

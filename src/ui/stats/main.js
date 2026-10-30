@@ -9,6 +9,7 @@ import {
   renderMenuOptions,
   renderRanking,
   renderStale,
+  renderTags,
   renderTimeline,
   shortDate,
 } from './views.js';
@@ -38,6 +39,7 @@ async function render() {
   $('#stale').innerHTML = hasVisits ? renderStale(stats.stale) : EMPTY;
   $('#weekdays').innerHTML = hasVisits ? renderColumns(stats.weekdays, (r) => `${r.label}요일 ${r.count}번${topNote(r)}`) : EMPTY;
   $('#months').innerHTML = hasVisits ? renderColumns(stats.months, (r) => `${r.label} ${r.count}번${topNote(r)}`) : EMPTY;
+  $('#tags').innerHTML = hasVisits ? renderTags(stats.tags, stats.untaggedVisits) : EMPTY;
   const days = groupByDay(stats.timeline);
   $('#timeline').innerHTML = renderTimeline(days.slice(0, shownDays));
   $('#more').hidden = days.length <= shownDays;

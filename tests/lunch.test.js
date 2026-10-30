@@ -13,8 +13,8 @@ function memoryStore() {
     async listMenus() {
       return menus.map((m) => ({ ...m }));
     },
-    async insertMenus(names) {
-      const rows = names.map((name) => ({ id: `m${++n}`, name, hidden: false, createdAt: `t${n}` }));
+    async insertMenus(added) {
+      const rows = added.map(({ name, tags }) => ({ id: `m${++n}`, name, hidden: false, tags, createdAt: `t${n}` }));
       menus.push(...rows);
       return rows;
     },
@@ -38,9 +38,9 @@ const setup = () => {
   return { store, lunch: createLunchService(store, () => '2026-10-30') };
 };
 
-test('an empty store starts with the default menus', async () => {
+test('an empty store starts with the default places and their tags', async () => {
   const { lunch } = setup();
-  assert.deepEqual((await lunch.listMenus()).map((m) => m.name), DEFAULT_MENUS);
+  assert.deepEqual((await lunch.listMenus()).map(({ name, tags }) => ({ name, tags })), DEFAULT_MENUS);
 });
 
 test('menu names are trimmed and unique ignoring case, hidden ones included', async () => {
@@ -79,4 +79,17 @@ test('a canceled visit drops out of the stats and comes back when restored', asy
   assert.equal((await lunch.loadStats()).stats.totalVisits, 0);
   await lunch.setVisitCanceled(id, false);
   assert.equal((await lunch.loadStats()).stats.totalVisits, 1);
+});
+
+test('tags are optional, cleaned up and capped', async () => {
+  const { lunch } = setup();
+  const menu = await lunch.addMenu('도이');
+  assert.deepEqual(menu.tags, []);
+  await lunch.setMenuTags(menu.id, [' #중식 ', '짬뽕', '중식', '#  탕수육  ']);
+  assert.deepEqual((await lunch.listMenus()).find((m) => m.id === menu.id).tags, ['중식', '짬뽕', '탕수육']);
+  await assert.rejects(lunch.setMenuTags(menu.id, ['#']), /태그를 입력/);
+  await assert.rejects(lunch.setMenuTags(menu.id, ['아주아주아주긴태그이름']), /10자/);
+  await assert.rejects(lunch.setMenuTags(menu.id, ['a', 'b', 'c', 'd', 'e', 'f']), /5개/);
+  await lunch.setMenuTags(menu.id, []);
+  assert.deepEqual((await lunch.listMenus()).find((m) => m.id === menu.id).tags, []);
 });

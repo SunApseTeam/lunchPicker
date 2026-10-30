@@ -8,10 +8,12 @@ const DAYS_BACK = 185;
 function sampleRows(today) {
   let seed = 20261030;
   const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const menus = [...DEFAULT_MENUS, '마라탕', '부대찌개'].map((name, i) => ({
+  const extra = [{ name: '홍콩반점', tags: ['중식', '짬뽕'] }, { name: '샐러디', tags: ['샐러드'] }, { name: '김밥천국', tags: [] }];
+  const menus = [...DEFAULT_MENUS, ...extra].map(({ name, tags }, i) => ({
     id: `demo-m${i}`,
     name,
-    hidden: name === '샐러드',
+    hidden: name === '샐러디',
+    tags: [...tags],
     createdAt: '2026-01-01T00:00:00Z',
   }));
   const visits = [];
@@ -23,10 +25,10 @@ function sampleRows(today) {
     const date = todayString(day);
     const picks = rng() < 0.2 ? 2 : 1;
     for (let k = 0; k < picks; k++) {
-      // Skewed toward the front of the list so the ranking has clear leaders; 초밥 is left out
-      // so the "not visited lately" card has something to show.
+      // Skewed toward the front of the list so the ranking has clear leaders; 노모어피자 is left
+      // out lately so the "not visited lately" card has something to show.
       let menu = menus[Math.floor(rng() ** 1.7 * (menus.length - 1))];
-      if (menu.name === '초밥' && back < 60) menu = menus[0];
+      if (menu.name === '노모어피자' && back < 60) menu = menus[0];
       visits.push({
         id: `demo-v${visits.length}`,
         menuId: menu.id,
@@ -47,8 +49,8 @@ export function createDemoStore() {
     async listMenus() {
       return menus.map((m) => ({ ...m }));
     },
-    async insertMenus(names) {
-      const rows = names.map((name) => ({ id: `demo-new${++n}`, name, hidden: false, createdAt: new Date().toISOString() }));
+    async insertMenus(added) {
+      const rows = added.map(({ name, tags }) => ({ id: `demo-new${++n}`, name, hidden: false, tags, createdAt: new Date().toISOString() }));
       menus.push(...rows);
       return rows.map((r) => ({ ...r }));
     },

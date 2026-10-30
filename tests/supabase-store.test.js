@@ -34,11 +34,24 @@ test('rows come back in the app shape, read page by page', async () => {
 
 test('a duplicate name and a refused request become readable errors', async () => {
   fakeFetch(() => Response.json({ code: '23505' }, { status: 409 }));
-  await assert.rejects(store().insertMenus(['국밥']), /같은 이름/);
+  await assert.rejects(store().insertMenus([{ name: '국밥', tags: [] }]), /같은 이름/);
   fakeFetch(() => Response.json({ code: '42501' }, { status: 401 }));
   await assert.rejects(store().updateVisit('v1', { canceled: true }), /42501/);
   globalThis.fetch = async () => {
     throw new TypeError('offline');
   };
   await assert.rejects(store().listMenus(), /연결하지 못했어요/);
+});
+
+test('menus carry their tags both ways', async () => {
+  const calls = fakeFetch((url, init) =>
+    init.method === 'POST'
+      ? Response.json([{ id: 'm1', name: '도이', hidden: false, icon: null, tags: ['중식'], created_at: 't' }], { status: 201 })
+      : new Response(null, { status: 204 }),
+  );
+  const [menu] = await store().insertMenus([{ name: '도이', tags: ['중식'] }]);
+  assert.deepEqual(calls[0].body, [{ name: '도이', tags: ['중식'] }]);
+  assert.deepEqual(menu.tags, ['중식']);
+  await store().updateMenu('m1', { tags: ['중식', '짬뽕'] });
+  assert.deepEqual(calls[1].body, { tags: ['중식', '짬뽕'] });
 });

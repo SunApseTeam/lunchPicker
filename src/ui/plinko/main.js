@@ -12,6 +12,7 @@ import { createIconPicker } from './icon-picker.js';
 import { createMenuPanel } from './menu-panel.js';
 import { SLOT_COLORS, createRenderer } from './render.js';
 import { createSettingsDialog } from './settings-dialog.js';
+import { createTagEditor } from './tag-editor.js';
 
 const MAX_PICK = 5;
 const SLOWMO_SCALE = 0.4;
@@ -250,6 +251,9 @@ const menuPanel = createMenuPanel({
   onIcon(menu) {
     iconPicker.open(menu);
   },
+  onTags(menu) {
+    tagEditor.open(menu, menus);
+  },
   async onAdd(name) {
     const added = await attempt(async () => candidateIds.add((await lunch.addMenu(name)).id));
     await refreshMenus();
@@ -261,6 +265,14 @@ const iconPicker = createIconPicker({
   async onPick(id, icon) {
     await attempt(() => lunch.setMenuIcon(id, icon));
     await refreshMenus();
+  },
+});
+
+const tagEditor = createTagEditor({
+  async onChange(id, tags) {
+    const saved = await attempt(() => lunch.setMenuTags(id, tags));
+    await refreshMenus();
+    return saved;
   },
 });
 
@@ -293,7 +305,7 @@ $('#confirm').addEventListener('click', confirmResult);
 $('#retry').addEventListener('click', retry);
 
 document.addEventListener('keydown', (e) => {
-  if (settingsDialog.isOpen() || iconPicker.isOpen()) return;
+  if (settingsDialog.isOpen() || iconPicker.isOpen() || tagEditor.isOpen()) return;
   if (e.target instanceof Element && e.target.closest('input, textarea')) return;
   // Space only ever means "drop"; never let it press whichever button holds focus.
   if (e.code === 'Space') {
