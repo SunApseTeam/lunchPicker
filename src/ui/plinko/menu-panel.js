@@ -1,10 +1,11 @@
+import { menuIcon } from '../../domain/icon.js';
 import { searchMenus } from '../../domain/search.js';
 import { $, escapeHtml } from '../shared/dom.js';
 
 // The menu list in the sidebar: today's candidate checkboxes, inline rename, hide/unhide and
 // the add form, filtered by the search box. It owns only the rename and search state; everything
 // else comes from main.
-export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd }) {
+export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd, onIcon }) {
   let editingId = null;
   let query = '';
   let last = { menus: [], candidateIds: new Set() };
@@ -22,6 +23,7 @@ export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd })
             : `<button class="name" data-action="edit" data-id="${m.id}" title="눌러서 이름 수정">${escapeHtml(m.name)}</button>`;
         return `<li class="${checked ? '' : 'off'}">
         <label class="check"><input type="checkbox" data-action="toggle" data-id="${m.id}" ${checked} aria-label="${escapeHtml(m.name)} 오늘 후보"><span></span></label>
+        <button class="icon-btn" data-action="icon" data-id="${m.id}" title="아이콘 바꾸기" aria-label="${escapeHtml(m.name)} 아이콘 바꾸기">${menuIcon(m)}</button>
         ${name}
         <button class="ghost" data-action="hide" data-id="${m.id}" title="숨기기">숨김</button>
       </li>`;
@@ -34,7 +36,7 @@ export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd })
     $('#search-empty').hidden = !nothing;
     if (nothing) $('#search-empty span').textContent = `'${query.trim()}' 메뉴가 없어요`;
     $('#hidden-list').innerHTML = hidden
-      .map((m) => `<li><span class="name">${escapeHtml(m.name)}</span><button class="ghost" data-action="unhide" data-id="${m.id}">다시 보이기</button></li>`)
+      .map((m) => `<li><span class="icon-btn" aria-hidden="true">${menuIcon(m)}</span><span class="name">${escapeHtml(m.name)}</span><button class="ghost" data-action="unhide" data-id="${m.id}">다시 보이기</button></li>`)
       .join('');
     const input = $('#menu-list .rename');
     if (input) {
@@ -56,6 +58,8 @@ export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd })
       render();
     } else if (target.dataset.action === 'hide') {
       onHide(target.dataset.id);
+    } else if (target.dataset.action === 'icon') {
+      onIcon(last.menus.find((m) => m.id === target.dataset.id));
     }
   });
 

@@ -2,11 +2,13 @@ import { createLunchService } from '../../application/lunch.js';
 import { todayString } from '../../domain/date.js';
 import { DT, createBoard, equalWidths, maxSlots, physicsFrom } from '../../domain/physics.js';
 import { createRound, stepRound } from '../../domain/round.js';
+import { menuIcon } from '../../domain/icon.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
 import { loadSettings, saveSettings } from '../../infrastructure/settings-storage.js';
 import { createStore, storeMode } from '../../infrastructure/store.js';
 import { $, escapeHtml, markMode, toast } from '../shared/dom.js';
 import { createAudio } from './audio.js';
+import { createIconPicker } from './icon-picker.js';
 import { createMenuPanel } from './menu-panel.js';
 import { SLOT_COLORS, createRenderer } from './render.js';
 import { createSettingsDialog } from './settings-dialog.js';
@@ -55,10 +57,15 @@ function shuffle(list) {
 
 // Slot indices in a finished round point into slotMenus, so only rebuild while idle.
 // Slots are not equally likely (bumpers and walls shape where balls land), so fairness comes
-// from the shuffle: every menu is equally likely to sit in every slot.
-function rebuildBoard() {
+// from the shuffle: every menu is equally likely to sit in every slot. Every new round
+// reshuffles; a rename, icon or size change keeps today's order when the candidates are the same.
+function rebuildBoard({ reshuffle = false } = {}) {
   if (phase.name !== 'idle') return;
-  slotMenus = candidatesValid() ? shuffle(candidates()) : [{ name: '?' }, { name: '?' }];
+  const next = candidatesValid() ? candidates() : null;
+  const same = next && next.length === slotMenus.length && slotMenus.every((s) => next.some((m) => m.id === s.id));
+  if (!next) slotMenus = [{ name: '?' }, { name: '?' }];
+  else if (same && !reshuffle) slotMenus = slotMenus.map((s) => next.find((m) => m.id === s.id));
+  else slotMenus = shuffle(next);
   board = createBoard(equalWidths(slotMenus.length), settings.size);
   pickCount = Math.min(pickCount, maxPick());
 }
@@ -79,7 +86,7 @@ function drop() {
 
 function backToIdle() {
   phase = { name: 'idle', round: null };
-  rebuildBoard();
+  rebuildBoard({ reshuffle: true });
   setPhase(phase);
 }
 
@@ -180,7 +187,7 @@ function renderResult() {
   const picked = phase.round.winners.map((slot) => ({ menu: slotMenus[slot], color: SLOT_COLORS[slot % SLOT_COLORS.length] }));
   $('#result-title').textContent = picked.length > 1 ? `오늘은 ${picked.length}곳으로 나눠 가요` : '오늘의 점심은';
   $('#result-names').innerHTML = picked
-    .map(({ menu, color }) => `<li style="--chip:${color}">${escapeHtml(menu.name)}</li>`)
+    .map(({ menu, color }) => `<li style="--chip:${color}">${menuIcon(menu)} ${escapeHtml(menu.name)}</li>`)
     .join('');
   overlay.hidden = false;
   $('#confirm').focus();
@@ -237,6 +244,9 @@ const menuPanel = createMenuPanel({
     await attempt(() => lunch.setMenuHidden(id, false));
     await refreshMenus();
   },
+  onIcon(menu) {
+    iconPicker.open(menu);
+  },
   async onAdd(name) {
     const added = await attempt(async () => candidateIds.add((await lunch.addMenu(name)).id));
     await refreshMenus();
@@ -244,18 +254,19 @@ const menuPanel = createMenuPanel({
   },
 });
 
-// Size changes the board geometry; keep today's slot order instead of reshuffling on every
-// slider tick, unless the current order no longer fits.
+const iconPicker = createIconPicker({
+  async onPick(id, icon) {
+    await attempt(() => lunch.setMenuIcon(id, icon));
+    await refreshMenus();
+  },
+});
+
 function applySettings(next) {
   const sizeChanged = next.size !== settings.size;
   settings = next;
   saveSettings(settings);
   audio.setMuted(!settings.sound);
-  if (sizeChanged && phase.name === 'idle') {
-    const fits = candidatesValid() && slotMenus.length === candidates().length && slotMenus.every((m) => candidateIds.has(m.id));
-    if (fits) board = createBoard(equalWidths(slotMenus.length), settings.size);
-    else rebuildBoard();
-  }
+  if (sizeChanged) rebuildBoard();
   settingsDialog.render();
   renderControls();
 }
@@ -279,7 +290,7 @@ $('#confirm').addEventListener('click', confirmResult);
 $('#retry').addEventListener('click', retry);
 
 document.addEventListener('keydown', (e) => {
-  if (settingsDialog.isOpen()) return;
+  if (settingsDialog.isOpen() || iconPicker.isOpen()) return;
   if (e.target instanceof Element && e.target.closest('input, textarea')) return;
   // Space only ever means "drop"; never let it press whichever button holds focus.
   if (e.code === 'Space') {

@@ -2,7 +2,7 @@
 // build step or client library. The row policies in supabase/schema.sql decide what anon may do.
 const PAGE = 1000;
 
-const toMenu = (r) => ({ id: r.id, name: r.name, hidden: r.hidden, createdAt: r.created_at });
+const toMenu = (r) => ({ id: r.id, name: r.name, hidden: r.hidden, icon: r.icon ?? null, createdAt: r.created_at });
 const toVisit = (r) => ({
   id: r.id,
   menuId: r.menu_id,

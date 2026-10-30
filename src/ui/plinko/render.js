@@ -1,3 +1,4 @@
+import { menuIcon } from '../../domain/icon.js';
 import { FRAME, cameraTarget, createCamera, followCamera, onScreen } from './camera.js';
 
 export const SLOT_COLORS = [
@@ -88,7 +89,7 @@ export function createRenderer(canvas) {
       ctx.fillStyle = hexToRgba(color, won ? 0.95 : 0.35);
       ctx.fillRect(x0, board.floorY, x1 - x0, board.height - board.floorY);
       const max = x1 - x0 - 16;
-      let size = 30;
+      let size = 26;
       ctx.font = `700 ${size}px "IBM Plex Sans KR", sans-serif`;
       while (ctx.measureText(slotMenus[i].name).width > max && size > 16) {
         size -= 2;
@@ -100,7 +101,16 @@ export function createRenderer(canvas) {
       ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(label, (x0 + x1) / 2, (board.floorY + board.height) / 2);
+      const cx = (x0 + x1) / 2;
+      const mid = (board.floorY + board.height) / 2;
+      // The placeholder slots shown before enough menus are picked have no id and no icon.
+      if (slotMenus[i].id) {
+        ctx.fillText(label, cx, mid + 16);
+        ctx.font = `${Math.min(38, max * 0.55)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+        ctx.fillText(menuIcon(slotMenus[i]), cx, mid - 18);
+      } else {
+        ctx.fillText(label, cx, mid);
+      }
     }
     ctx.fillStyle = PEG;
     for (const x of board.dividers) {

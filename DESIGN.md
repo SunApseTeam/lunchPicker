@@ -8,7 +8,7 @@ grilling 인터뷰로 확정한 내용 (2026-10-28).
 - 우리 팀 하나만 씀 (팀 구분 없음)
 - 주 사용 장면: 한 명이 PC나 큰 화면으로 돌리고 나머지는 구경. 팀원은 각자 기기에서 통계를 봄
 - 진동 없음. 화면과 소리로 연출
-- 밝은 테마. 포인트 색은 Sunapse 로고의 빨강(#f96262), 로고는 원본 그대로 제목 위에 둠
+- 제목은 "두근두근 점심메뉴 고르기". 밝은 테마, 포인트 색은 Sunapse 로고의 빨강(#f96262), 로고는 원본 그대로 제목 위에 둠. 두 페이지에 made by Garden Ko 표시
 - GitHub Pages는 파일을 브라우저에 10분(max-age=600) 캐시하게 함. 배포 직후 이미 열어 본 브라우저는 최대 10분 동안 이전 버전을 볼 수 있음 (강력 새로고침 Ctrl+Shift+R로 바로 갱신)
 
 ## 추첨: 말랑 구슬 플링코
@@ -37,6 +37,7 @@ grilling 인터뷰로 확정한 내용 (2026-10-28).
 - 공유 리스트를 DB에 저장. 매일 체크박스로 오늘 후보를 켜고 끔
 - 누구나 추가, 이름 수정, 숨기기 가능. 완전 삭제는 없음
 - 이름을 고치면 과거 기록에도 새 이름이 반영됨 (기록은 menu_id로 참조)
+- 메뉴 아이콘: 직접 고른 이모지(menus.icon)가 있으면 그것, 없으면 이름 속 낱말로 추측. 목록, 보드 칸, 결과, 통계에 모두 표시
 
 ## 기록
 - [확정]을 누르면 뽑힌 K개 메뉴를 모두 오늘 날짜로 기록 (팀이 나눠서 둘 다 감)
@@ -54,7 +55,7 @@ grilling 인터뷰로 확정한 내용 (2026-10-28).
 
 ## 데이터 모델 (Supabase)
 ```
-menus  (id, name unique, hidden bool default false, created_at)
+menus  (id, name unique, hidden bool default false, icon text null, created_at)
 visits (id, menu_id → menus.id, visited_on date, source 'spin'|'manual',
         canceled bool default false, created_at)
 ```

@@ -1,4 +1,5 @@
 import { WEEKDAYS, dayNumber, weekdayOf } from './date.js';
+import { menuIcon } from './icon.js';
 
 // Pure stats over the store's rows.
 const MONTHS_SHOWN = 6;
@@ -21,11 +22,12 @@ function leader(visits, names) {
 
 export function computeStats(menus, visits, today) {
   const names = new Map(menus.map((m) => [m.id, m.name]));
+  const icons = new Map(menus.map((m) => [m.id, menuIcon(m)]));
   const active = visits.filter((v) => !v.canceled);
 
   const byMenu = new Map();
   for (const v of active) {
-    const entry = byMenu.get(v.menuId) ?? { id: v.menuId, name: names.get(v.menuId) ?? '?', count: 0, lastVisit: '' };
+    const entry = byMenu.get(v.menuId) ?? { id: v.menuId, name: names.get(v.menuId) ?? '?', icon: icons.get(v.menuId), count: 0, lastVisit: '' };
     entry.count += 1;
     if (v.visitedOn > entry.lastVisit) entry.lastVisit = v.visitedOn;
     byMenu.set(v.menuId, entry);
@@ -39,7 +41,7 @@ export function computeStats(menus, visits, today) {
     .filter((m) => !m.hidden)
     .map((m) => {
       const last = byMenu.get(m.id)?.lastVisit;
-      return { id: m.id, name: m.name, daysSince: last ? dayNumber(today) - dayNumber(last) : null };
+      return { id: m.id, name: m.name, icon: icons.get(m.id), daysSince: last ? dayNumber(today) - dayNumber(last) : null };
     })
     .sort((a, b) => (b.daysSince ?? Infinity) - (a.daysSince ?? Infinity) || a.name.localeCompare(b.name, 'ko'));
 
@@ -60,7 +62,7 @@ export function computeStats(menus, visits, today) {
   }
 
   const timeline = visits
-    .map((v) => ({ ...v, name: names.get(v.menuId) ?? '?' }))
+    .map((v) => ({ ...v, name: names.get(v.menuId) ?? '?', icon: icons.get(v.menuId) }))
     .sort((a, b) => b.visitedOn.localeCompare(a.visitedOn) || b.createdAt.localeCompare(a.createdAt));
 
   return {

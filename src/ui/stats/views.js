@@ -1,4 +1,5 @@
 import { weekdayOf } from '../../domain/date.js';
+import { DEFAULT_ICON, menuIcon } from '../../domain/icon.js';
 import { escapeHtml } from '../shared/dom.js';
 
 // HTML for each stats card, built from computeStats() output. No DOM access here.
@@ -36,7 +37,7 @@ export function renderRanking(ranking) {
       const place = 1 + ranking.filter((o) => o.count > r.count).length;
       return `<li class="${place <= 3 ? 'podium' : ''}" title="${escapeHtml(r.name)}: ${place}위, ${r.count}번, 마지막 ${shortDate(r.lastVisit)}">
         <span class="rank">${place <= 3 ? medal(place) : place}</span>
-        <span class="name">${escapeHtml(r.name)}</span>
+        <span class="name"><span class="emoji">${r.icon ?? DEFAULT_ICON}</span>${escapeHtml(r.name)}</span>
         <span class="track"><span class="bar" style="width:${(r.count / max) * 100}%"></span></span>
         <span class="val">${r.count}번</span>
       </li>`;
@@ -50,7 +51,7 @@ export function renderStale(stale) {
     .map((s, i) => {
       const cls = s.daysSince === null ? 'never' : i < 3 ? 'top' : '';
       const ago = s.daysSince === null ? '아직 한 번도 안 감' : s.daysSince === 0 ? '오늘 감' : `${s.daysSince}일 전`;
-      return `<li class="${cls}"><span class="name">${escapeHtml(s.name)}</span><span class="ago">${ago}</span></li>`;
+      return `<li class="${cls}"><span class="name"><span class="emoji">${s.icon ?? DEFAULT_ICON}</span>${escapeHtml(s.name)}</span><span class="ago">${ago}</span></li>`;
     })
     .join('')}</ul>`;
 }
@@ -85,7 +86,7 @@ export function renderTimeline(days) {
       (day) => `<div class="day"><time datetime="${day.date}">${shortDate(day.date)}</time><ul>${day.visits
         .map(
           (v) => `<li class="visit${v.canceled ? ' canceled' : ''}">
-            <span class="name">${escapeHtml(v.name)}</span>
+            <span class="name"><span class="emoji">${v.icon ?? DEFAULT_ICON}</span>${escapeHtml(v.name)}</span>
             ${v.source === 'manual' ? '<small>직접 추가</small>' : ''}
             ${v.canceled ? '<small>취소됨</small>' : ''}
             <button data-id="${v.id}" data-cancel="${!v.canceled}">${v.canceled ? '되돌리기' : '취소'}</button>
@@ -102,7 +103,7 @@ export function renderMenuOptions(menus) {
     menus
       .filter((m) => !m.hidden)
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-      .map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`)
+      .map((m) => `<option value="${m.id}">${menuIcon(m)} ${escapeHtml(m.name)}</option>`)
       .join('')
   );
 }

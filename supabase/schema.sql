@@ -5,8 +5,11 @@ create table if not exists public.menus (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(name) between 1 and 20),
   hidden boolean not null default false,
+  icon text check (icon is null or char_length(icon) <= 16),
   created_at timestamptz not null default now()
 );
+-- Projects created before menu icons existed.
+alter table public.menus add column if not exists icon text check (icon is null or char_length(icon) <= 16);
 create unique index if not exists menus_name_unique on public.menus (lower(name));
 
 create table if not exists public.visits (

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sunapse 점심 플링코</title>
+  <title>Sunapse 두근두근 점심메뉴 고르기</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -45,7 +45,8 @@
       overflow-y: auto;
     }
     h1 {
-      font: 400 38px/1 "Black Han Sans", sans-serif;
+      font: 400 34px/1.15 "Black Han Sans", sans-serif;
+      word-break: keep-all;
       margin: 0;
       letter-spacing: 1px;
     }
@@ -169,7 +170,7 @@
     }
     #toast.error { background: var(--pink); }
     #toast.show { opacity: 1; transform: translate(-50%, 0); }
-    .brand { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .brand-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
     .icon {
       flex: none; width: 42px; height: 42px; display: grid; place-items: center;
       background: none; border: 1px solid var(--line); border-radius: 12px; color: var(--text);
@@ -182,8 +183,19 @@
       background: var(--mint); color: var(--ink); font-size: 12px; font-weight: 700; white-space: nowrap;
       box-shadow: 0 8px 24px rgba(28, 29, 38, 0.2); pointer-events: none;
     }
-    .wordmark { display: inline-block; margin-bottom: 8px; }
-    .wordmark img { display: block; height: 22px; width: auto; }
+    .wordmark { display: inline-block; }
+    .wordmark img { display: block; height: 36px; width: auto; }
+    .beat { display: inline-block; color: var(--accent); animation: beat 1.4s ease-in-out infinite; transform-origin: 50% 60%; }
+    @keyframes beat { 0%, 40%, 100% { transform: scale(1); } 10%, 28% { transform: scale(1.08); } }
+    @media (prefers-reduced-motion: reduce) { .beat { animation: none; } }
+    .icon-btn { flex: none; width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; font-size: 19px; line-height: 1; padding: 0; }
+    .icon-btn:hover { background: var(--panel); }
+    #icon-picker .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 14px 22px 4px; }
+    #icon-picker .grid button { font-size: 24px; padding: 8px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    #icon-picker .grid button:hover, #icon-picker .grid button.on { border-color: var(--accent); background: #fff1f0; }
+    #icon-picker-auto { background: none; border: 1px solid var(--line); color: var(--muted); }
+    .credit { color: var(--muted); font-size: 12px; }
+    .credit b { color: var(--text); font-weight: 700; }
     .search { position: relative; display: block; margin-bottom: 6px; }
     .search svg { position: absolute; left: 10px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
     #menu-search {
@@ -238,22 +250,22 @@
 <body data-phase="idle">
   <aside>
     <header class="brand">
-      <div>
-        <span class="wordmark"><img src="https://i.postimg.cc/Mp49v4Hd/wordmark-transparent-x1.png" alt="sunapse" width="81" height="24"></span>
-        <h1>점심 <span>플링코</span></h1>
-        <p class="sub">말랑한 구슬이 멈추는 곳이 오늘의 점심</p>
+      <div class="brand-top">
+        <span class="wordmark"><img src="https://i.postimg.cc/Mp49v4Hd/wordmark-transparent-x1.png" alt="sunapse" width="135" height="40"></span>
+        <div class="brand-actions">
+        <a href="stats.html" data-keep-mode class="icon" aria-label="기록과 통계" title="기록과 통계">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/></svg>
+        </a>
+        <button id="open-settings" class="icon" aria-label="설정" title="설정">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+        </div>
       </div>
-      <div class="brand-actions">
-      <a href="stats.html" data-keep-mode class="icon" aria-label="기록과 통계" title="기록과 통계">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/></svg>
-      </a>
-      <button id="open-settings" class="icon" aria-label="설정" title="설정">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
-      </button>
-      </div>
+      <h1><span class="beat">두근두근</span><br>점심메뉴 고르기</h1>
+      <p class="sub">말랑한 구슬이 멈추는 곳이 오늘의 점심</p>
     </header>
     <section>
       <h2>오늘 후보 <span><b id="candidate-count">0</b>개</span></h2>
@@ -285,6 +297,7 @@
       <p id="drop-hint" role="status"></p>
       <div class="foot">
         <span><kbd>Space</kbd> 떨어뜨리기 · <kbd>R</kbd> 다시</span>
+        <span class="credit">made by <b>Garden Ko</b></span>
       </div>
     </section>
   </aside>
@@ -319,6 +332,18 @@
     <footer class="dialog-foot">
       <button id="settings-reset">기본값으로</button>
       <button id="settings-close">닫기</button>
+    </footer>
+  </dialog>
+  <dialog id="icon-picker" aria-labelledby="icon-picker-title">
+    <header class="dialog-head">
+      <h2 id="icon-picker-title">아이콘 고르기</h2>
+      <button id="icon-picker-dismiss" class="icon" aria-label="닫기" title="닫기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+    <div class="grid" id="icon-picker-grid"></div>
+    <footer class="dialog-foot">
+      <button id="icon-picker-auto">이름으로 자동</button>
     </footer>
   </dialog>
   <div id="toast" role="status" aria-live="polite"></div>

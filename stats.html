@@ -43,8 +43,11 @@
       color: var(--ink); background: var(--yellow); text-decoration: none; font-weight: 700;
       padding: 10px 16px; border-radius: 12px; white-space: nowrap;
     }
-    .wordmark { display: inline-block; margin-bottom: 8px; }
-    .wordmark img { display: block; height: 22px; width: auto; }
+    .wordmark { display: inline-block; margin-bottom: 10px; }
+    .wordmark img { display: block; height: 36px; width: auto; }
+    .emoji { display: inline-block; width: 1.5em; text-align: center; margin-right: 2px; }
+    .page-foot { margin-top: 28px; text-align: right; color: var(--muted); font-size: 12px; }
+    .page-foot b { color: var(--text); }
     .mode-banner {
       position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5;
       max-width: calc(100% - 32px); padding: 8px 16px; border-radius: 999px;
@@ -129,7 +132,7 @@
   <div class="page">
     <header>
       <div>
-        <span class="wordmark"><img src="https://i.postimg.cc/Mp49v4Hd/wordmark-transparent-x1.png" alt="sunapse" width="81" height="24"></span>
+        <span class="wordmark"><img src="https://i.postimg.cc/Mp49v4Hd/wordmark-transparent-x1.png" alt="sunapse" width="135" height="40"></span>
         <h1>점심 <span>기록</span></h1>
         <p id="summary"></p>
       </div>
@@ -168,6 +171,7 @@
         <button id="more" hidden>더 보기</button>
       </section>
     </div>
+    <footer class="page-foot">made by <b>Garden Ko</b></footer>
   </div>
   <div id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="src/ui/stats/main.js"></script>
