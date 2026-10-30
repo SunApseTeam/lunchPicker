@@ -21,7 +21,7 @@ python tools/serve.py 5178
 - 결과가 나오면 "여기 간다!"로 기록하거나, "다시 돌리기"나 `R`로 다시 돌립니다.
 - 왼쪽 위 막대그래프 아이콘(`stats.html`)에서 방문 랭킹, 오래 안 간 곳, 요일별·월별 패턴, 기록 타임라인을 봅니다. 타임라인에서 기록을 취소하거나 되돌리고, 직접 추가할 수 있습니다.
 
-지금은 메뉴와 기록을 브라우저 localStorage에 저장합니다. Supabase 공유 저장소는 다음 단계이고, 직접 해야 할 설정은 [SETUP.md](SETUP.md)에 있습니다.
+메뉴와 기록은 [src/config.js](src/config.js)에 Supabase 주소가 있으면 Supabase에, 비어 있으면 이 브라우저의 localStorage에 저장합니다. Supabase 쪽 설정은 [SETUP.md](SETUP.md)에 있습니다.
 
 ## 개발
 
