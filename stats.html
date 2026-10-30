@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>점심 기록</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #14151f;
+      --panel: #1c1e2d;
+      --line: #2c2f45;
+      --cream: #f4ead5;
+      --muted: #9a9cb5;
+      --yellow: #ffe066;
+      --pink: #ff5d8f;
+      --mint: #4fd1c5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(1200px 700px at 70% -10%, #2a2142 0%, transparent 60%), var(--ink);
+      background-attachment: fixed;
+      color: var(--cream);
+      font: 15px/1.5 "IBM Plex Sans KR", system-ui, sans-serif;
+    }
+    .page { max-width: 1040px; margin: 0 auto; padding: 28px 16px 60px; }
+    header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+    h1 { font: 400 38px/1 "Black Han Sans", sans-serif; margin: 0; letter-spacing: 1px; }
+    h1 span { color: var(--yellow); }
+    #summary { margin: 8px 0 0; color: var(--muted); }
+    #summary b { color: var(--cream); }
+    .back {
+      color: var(--ink); background: var(--yellow); text-decoration: none; font-weight: 700;
+      padding: 10px 16px; border-radius: 12px; white-space: nowrap;
+    }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .card { background: rgba(28, 30, 45, 0.85); border: 1px solid var(--line); border-radius: 20px; padding: 20px; min-width: 0; }
+    .card.wide { grid-column: 1 / -1; }
+    h2 { font: 400 22px/1.1 "Black Han Sans", sans-serif; margin: 0 0 4px; letter-spacing: .5px; }
+    .hint { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+    .empty { color: var(--muted); font-size: 14px; padding: 18px 0; text-align: center; }
+    ul { list-style: none; margin: 0; padding: 0; }
+
+    .hbars li { display: grid; grid-template-columns: 22px minmax(64px, 7em) 1fr auto; align-items: center; gap: 10px; padding: 5px 0; }
+    .hbars .rank { color: var(--muted); font-size: 13px; text-align: right; }
+    .hbars li:nth-child(-n+3) .rank { color: var(--yellow); font-weight: 700; }
+    .hbars .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hbars .track { height: 14px; }
+    .hbars .bar { display: block; height: 100%; min-width: 4px; background: var(--yellow); border-radius: 0 4px 4px 0; }
+    .hbars .val { font-weight: 700; min-width: 2.5em; text-align: right; }
+
+    .stale li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .stale li:last-child { border-bottom: 0; }
+    .stale .name { font-weight: 500; }
+    .stale .ago { color: var(--muted); font-size: 14px; white-space: nowrap; }
+    .stale li.top .ago { color: var(--cream); font-weight: 700; }
+    .stale li.never .ago { color: var(--mint); font-weight: 700; }
+
+    .vbars { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; align-items: end; }
+    .vbars .col { display: grid; grid-template-rows: auto 120px auto auto; justify-items: center; gap: 4px; min-width: 0; }
+    .vbars .val { font-weight: 700; font-size: 14px; }
+    .vbars .track { width: 100%; max-width: 44px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--line); }
+    .vbars .bar { display: block; width: 100%; min-height: 0; background: var(--yellow); border-radius: 4px 4px 0 0; }
+    .vbars .label { font-weight: 700; }
+    .vbars .top { color: var(--muted); font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    #add-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+    #add-form input, #add-form select {
+      background: var(--panel); color: var(--cream); border: 1px solid var(--line); border-radius: 10px;
+      padding: 8px 10px; font: inherit; color-scheme: dark;
+    }
+    #add-form select { flex: 1; min-width: 120px; }
+    #add-form input:focus, #add-form select:focus { outline: 2px solid var(--mint); border-color: transparent; }
+    #add-form button { background: var(--yellow); color: var(--ink); border: 0; border-radius: 10px; padding: 8px 16px; font: inherit; font-weight: 700; cursor: pointer; }
+    .day { padding: 10px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 7.5em 1fr; gap: 12px; }
+    .day:first-child { border-top: 0; }
+    .day time { color: var(--muted); font-size: 14px; padding-top: 4px; }
+    .day ul { display: flex; flex-wrap: wrap; gap: 8px; }
+    .visit { display: inline-flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 6px 4px 14px; }
+    .visit .name { font-weight: 700; }
+    .visit small { color: var(--muted); font-size: 12px; }
+    .visit.canceled .name { color: var(--muted); text-decoration: line-through; font-weight: 400; }
+    .visit button {
+      background: none; border: 1px solid var(--line); border-radius: 999px; color: var(--muted);
+      padding: 1px 10px; font: inherit; font-size: 12px; cursor: pointer;
+    }
+    .visit button:hover { color: var(--cream); border-color: var(--muted); }
+    #more { margin-top: 12px; width: 100%; background: none; border: 1px dashed var(--line); color: var(--muted); border-radius: 12px; padding: 10px; font: inherit; cursor: pointer; }
+    #more[hidden] { display: none; }
+
+    #toast {
+      position: fixed; left: 50%; top: 20px; transform: translate(-50%, -20px);
+      background: var(--mint); color: var(--ink); font-weight: 700;
+      padding: 10px 18px; border-radius: 999px; opacity: 0; pointer-events: none;
+      transition: opacity .2s, transform .2s;
+    }
+    #toast.error { background: var(--pink); }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+    a:focus-visible, button:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+
+    @media (max-width: 720px) {
+      .grid { grid-template-columns: 1fr; }
+      h1 { font-size: 32px; }
+      .day { grid-template-columns: 1fr; gap: 6px; }
+      .day time { padding-top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div>
+        <h1>점심 <span>기록</span></h1>
+        <p id="summary"></p>
+      </div>
+      <a class="back" href="./">플링코 돌리러 가기</a>
+    </header>
+    <div class="grid">
+      <section class="card">
+        <h2>방문 랭킹</h2>
+        <p class="hint">지금까지 몇 번 갔는지</p>
+        <div id="ranking"></div>
+      </section>
+      <section class="card">
+        <h2>오래 안 간 곳</h2>
+        <p class="hint">마지막으로 간 뒤 지난 날수. 숨긴 메뉴는 빼고 보여요</p>
+        <div id="stale"></div>
+      </section>
+      <section class="card">
+        <h2>요일별</h2>
+        <p class="hint">요일마다 간 횟수와 그 요일에 제일 많이 간 곳</p>
+        <div id="weekdays"></div>
+      </section>
+      <section class="card">
+        <h2>월별</h2>
+        <p class="hint">최근 6개월</p>
+        <div id="months"></div>
+      </section>
+      <section class="card wide">
+        <h2>기록</h2>
+        <p class="hint">잘못 들어간 기록은 취소할 수 있고, 취소도 되돌릴 수 있어요. 플링코 없이 간 날은 직접 추가하세요</p>
+        <form id="add-form" autocomplete="off">
+          <input id="add-date" type="date" required aria-label="날짜">
+          <select id="add-menu" required aria-label="메뉴"></select>
+          <button type="submit">직접 추가</button>
+        </form>
+        <div id="timeline"></div>
+        <button id="more" hidden>더 보기</button>
+      </section>
+    </div>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="src/stats-page.js"></script>
+</body>
+</html>

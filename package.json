@@ -1,0 +1,9 @@
+{
+  "name": "lunch-plinko",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "serve": "python tools/serve.py 5178"
+  }
+}
