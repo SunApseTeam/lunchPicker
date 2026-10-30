@@ -4,8 +4,8 @@ import { DT, createBoard, equalWidths, maxSlots, physicsFrom } from '../../domai
 import { createRound, stepRound } from '../../domain/round.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
 import { loadSettings, saveSettings } from '../../infrastructure/settings-storage.js';
-import { createStore } from '../../infrastructure/store.js';
-import { $, escapeHtml, toast } from '../shared/dom.js';
+import { createStore, storeMode } from '../../infrastructure/store.js';
+import { $, escapeHtml, markMode, toast } from '../shared/dom.js';
 import { createAudio } from './audio.js';
 import { createMenuPanel } from './menu-panel.js';
 import { SLOT_COLORS, createRenderer } from './render.js';
@@ -14,7 +14,9 @@ import { createSettingsDialog } from './settings-dialog.js';
 const MAX_PICK = 5;
 const SLOWMO_SCALE = 0.4;
 
-const lunch = createLunchService(createStore(), () => todayString());
+const mode = storeMode();
+const lunch = createLunchService(createStore(mode), () => todayString());
+markMode(mode);
 const audio = createAudio();
 const canvas = $('#board');
 const renderer = createRenderer(canvas);
@@ -115,9 +117,11 @@ function onEngineEvent(event) {
   }
 }
 
+// Slow motion is for the moment of truth: past the pegs, not yet in a slot. Once every moving
+// ball is in a slot the outcome is decided, so time runs at full speed to the result.
 function inFinale(round) {
   const moving = round.world.balls.filter((b) => !b.settled);
-  return moving.length > 0 && moving.every((b) => b.cy > board.pegBottom + 30);
+  return moving.length > 0 && moving.every((b) => b.cy > board.pegBottom + 30) && moving.some((b) => b.zone === null);
 }
 
 let last = performance.now();

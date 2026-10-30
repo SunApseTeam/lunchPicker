@@ -1,15 +1,18 @@
+import { searchMenus } from '../../domain/search.js';
 import { $, escapeHtml } from '../shared/dom.js';
 
 // The menu list in the sidebar: today's candidate checkboxes, inline rename, hide/unhide and
-// the add form. It owns only the rename-in-progress state; everything else comes from main.
+// the add form, filtered by the search box. It owns only the rename and search state; everything
+// else comes from main.
 export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd }) {
   let editingId = null;
+  let query = '';
   let last = { menus: [], candidateIds: new Set() };
 
   function render(menus = last.menus, candidateIds = last.candidateIds) {
     last = { menus, candidateIds };
-    const visible = menus.filter((m) => !m.hidden);
-    const hidden = menus.filter((m) => m.hidden);
+    const visible = searchMenus(menus.filter((m) => !m.hidden), query);
+    const hidden = searchMenus(menus.filter((m) => m.hidden), query);
     $('#menu-list').innerHTML = visible
       .map((m) => {
         const checked = candidateIds.has(m.id) ? 'checked' : '';
@@ -26,6 +29,10 @@ export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd })
       .join('');
     $('#hidden-count').textContent = hidden.length;
     $('#hidden-wrap').hidden = hidden.length === 0;
+    if (query && hidden.length > 0) $('#hidden-wrap').open = true;
+    const nothing = Boolean(query) && visible.length === 0 && hidden.length === 0;
+    $('#search-empty').hidden = !nothing;
+    if (nothing) $('#search-empty span').textContent = `'${query.trim()}' 메뉴가 없어요`;
     $('#hidden-list').innerHTML = hidden
       .map((m) => `<li><span class="name">${escapeHtml(m.name)}</span><button class="ghost" data-action="unhide" data-id="${m.id}">다시 보이기</button></li>`)
       .join('');
@@ -73,6 +80,29 @@ export function createMenuPanel({ onToggle, onRename, onHide, onUnhide, onAdd })
     const target = e.target.closest('[data-action="unhide"]');
     if (target) onUnhide(target.dataset.id);
   });
+
+  async function addFromSearch() {
+    if (await onAdd(query)) {
+      query = '';
+      $('#menu-search').value = '';
+      render();
+    }
+  }
+
+  $('#menu-search').addEventListener('input', (e) => {
+    query = e.target.value;
+    render();
+  });
+  $('#menu-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      query = '';
+      e.target.value = '';
+      render();
+    } else if (e.key === 'Enter' && !$('#search-empty').hidden) {
+      addFromSearch();
+    }
+  });
+  $('#search-add').addEventListener('click', addFromSearch);
 
   $('#add-form').addEventListener('submit', async (e) => {
     e.preventDefault();

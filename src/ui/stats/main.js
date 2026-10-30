@@ -1,7 +1,7 @@
 import { createLunchService } from '../../application/lunch.js';
 import { todayString } from '../../domain/date.js';
-import { createStore } from '../../infrastructure/store.js';
-import { $, toast } from '../shared/dom.js';
+import { createStore, storeMode } from '../../infrastructure/store.js';
+import { $, markMode, toast } from '../shared/dom.js';
 import {
   EMPTY,
   groupByDay,
@@ -15,7 +15,9 @@ import {
 
 const PAGE_DAYS = 14;
 
-const lunch = createLunchService(createStore(), () => todayString());
+const mode = storeMode();
+const lunch = createLunchService(createStore(mode), () => todayString());
+markMode(mode);
 let shownDays = PAGE_DAYS;
 
 const topNote = (r) => (r.top ? `, 제일 많이 간 곳 ${r.top}` : '');

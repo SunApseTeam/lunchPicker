@@ -10,18 +10,37 @@ export function shortDate(date) {
   return `${m}/${d} (${weekdayOf(date)})`;
 }
 
+const MEDALS = [
+  { label: '금메달', light: '#ffe58a', dark: '#c9971c', ribbon: '#ff5d8f' },
+  { label: '은메달', light: '#f1f3f8', dark: '#8d96aa', ribbon: '#5ab8ff' },
+  { label: '동메달', light: '#f2b77e', dark: '#a8642e', ribbon: '#4fd1c5' },
+];
+
+function medal(rank) {
+  const m = MEDALS[rank - 1];
+  return `<svg class="medal" viewBox="0 0 28 34" role="img" aria-label="${rank}위 ${m.label}">
+    <defs><radialGradient id="medal-${rank}" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="${m.light}"/><stop offset="1" stop-color="${m.dark}"/></radialGradient></defs>
+    <path d="M6 0h6l3.5 11h-6z" fill="${m.ribbon}"/><path d="M22 0h-6l-3.5 11h6z" fill="${m.ribbon}" opacity=".7"/>
+    <circle cx="14" cy="21.5" r="11" fill="url(#medal-${rank})" stroke="${m.dark}" stroke-width="1.5"/>
+    <circle cx="14" cy="21.5" r="7.5" fill="none" stroke="#fff" stroke-opacity=".55"/>
+    <text x="14" y="25.5" text-anchor="middle" font-size="11" font-weight="700" fill="#14151f">${rank}</text>
+  </svg>`;
+}
+
+// Ties share a place (two menus on 13 visits are both 2nd), so a tie for 1st gets two gold medals.
 export function renderRanking(ranking) {
   if (ranking.length === 0) return EMPTY;
   const max = ranking[0].count;
   return `<ul class="hbars">${ranking
-    .map(
-      (r, i) => `<li title="${escapeHtml(r.name)}: ${r.count}번, 마지막 ${shortDate(r.lastVisit)}">
-        <span class="rank">${i + 1}</span>
+    .map((r) => {
+      const place = 1 + ranking.filter((o) => o.count > r.count).length;
+      return `<li class="${place <= 3 ? 'podium' : ''}" title="${escapeHtml(r.name)}: ${place}위, ${r.count}번, 마지막 ${shortDate(r.lastVisit)}">
+        <span class="rank">${place <= 3 ? medal(place) : place}</span>
         <span class="name">${escapeHtml(r.name)}</span>
         <span class="track"><span class="bar" style="width:${(r.count / max) * 100}%"></span></span>
         <span class="val">${r.count}번</span>
-      </li>`,
-    )
+      </li>`;
+    })
     .join('')}</ul>`;
 }
 

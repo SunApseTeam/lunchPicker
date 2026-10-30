@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>점심 플링코</title>
+  <title>Sunapse 점심 플링코</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -169,6 +169,24 @@
     }
     .icon:hover { border-color: var(--muted); }
     .brand-actions { display: flex; gap: 8px; }
+    .mode-banner {
+      position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5;
+      max-width: calc(100% - 32px); padding: 8px 16px; border-radius: 999px;
+      background: var(--mint); color: var(--ink); font-size: 12px; font-weight: 700; white-space: nowrap;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); pointer-events: none;
+    }
+    .wordmark { display: inline-block; background: var(--cream); border-radius: 8px; padding: 5px 10px 4px; margin-bottom: 10px; }
+    .wordmark img { display: block; height: 18px; width: auto; }
+    .search { position: relative; display: block; margin-bottom: 6px; }
+    .search svg { position: absolute; left: 10px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+    #menu-search {
+      width: 100%; background: var(--panel); color: var(--cream);
+      border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px 8px 34px; font: inherit;
+    }
+    #menu-search:focus { outline: 2px solid var(--mint); border-color: transparent; }
+    #menu-search::placeholder { color: var(--muted); font-size: 13px; }
+    .search-empty { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 8px 4px; color: var(--muted); font-size: 13px; }
+    .search-empty[hidden] { display: none; }
     .icon svg { width: 22px; height: 22px; }
     dialog {
       width: min(400px, calc(100vw - 32px)); padding: 0;
@@ -214,11 +232,12 @@
   <aside>
     <header class="brand">
       <div>
+        <span class="wordmark"><img src="https://i.postimg.cc/Mp49v4Hd/wordmark-transparent-x1.png" alt="sunapse" width="81" height="24"></span>
         <h1>점심 <span>플링코</span></h1>
         <p class="sub">말랑한 구슬이 멈추는 곳이 오늘의 점심</p>
       </div>
       <div class="brand-actions">
-      <a href="stats.html" class="icon" aria-label="기록과 통계" title="기록과 통계">
+      <a href="stats.html" data-keep-mode class="icon" aria-label="기록과 통계" title="기록과 통계">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/></svg>
       </a>
       <button id="open-settings" class="icon" aria-label="설정" title="설정">
@@ -231,7 +250,12 @@
     </header>
     <section>
       <h2>오늘 후보 <span><b id="candidate-count">0</b>개</span></h2>
+      <label class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="menu-search" type="search" autocomplete="off" placeholder="검색 · 초성 ㄱㅊ · 줄임말 김찌" aria-label="메뉴 검색">
+      </label>
       <ul id="menu-list"></ul>
+      <p id="search-empty" class="search-empty" hidden><span></span><button type="button" id="search-add" class="ghost">메뉴로 추가</button></p>
       <form id="add-form" autocomplete="off">
         <input id="add-input" maxlength="20" placeholder="메뉴 추가" aria-label="새 메뉴 이름">
         <button type="submit">추가</button>

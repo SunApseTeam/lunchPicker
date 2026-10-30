@@ -16,6 +16,7 @@ python tools/serve.py 5178
 
 ## 조작
 
+- 왼쪽 검색창으로 메뉴를 찾습니다. 초성(`ㄱㅊ`), 줄임말(`김찌`), 입력 중인 글자(`김ㅊ`), 한영 전환을 깜빡한 입력(`rlacl`)도 찾습니다. 없으면 바로 메뉴로 추가할 수 있습니다.
 - 왼쪽 목록에서 오늘 후보를 체크합니다. 이름을 누르면 수정하고, "숨김"을 누르면 목록에서 숨깁니다.
 - 뽑을 개수를 고른 뒤 버튼이나 `Space`로 구슬을 떨어뜨립니다.
 - 결과가 나오면 "여기 간다!"로 기록하거나, "다시 돌리기"나 `R`로 다시 돌립니다.
@@ -23,7 +24,11 @@ python tools/serve.py 5178
 
 메뉴와 기록은 [src/infrastructure/config.js](src/infrastructure/config.js)에 Supabase 주소가 있으면 팀 공유 Supabase에, 비어 있으면 이 브라우저의 localStorage에 저장합니다. Supabase 쪽 설정은 [SETUP.md](SETUP.md)에 있습니다.
 
-주소 뒤에 `?local`을 붙이면(예: http://localhost:5178/?local) 이 브라우저 저장소만 씁니다. 시험해 봐도 팀 기록에 남지 않습니다.
+주소 뒤에 붙이는 모드:
+- `?demo`: 예시 기록 약 6개월치로 화면을 봅니다. 무엇을 바꿔도 저장되지 않습니다 (예: `stats.html?demo`).
+- `?local`: 이 브라우저 저장소만 씁니다. 시험해 봐도 팀 기록에 남지 않습니다.
+
+두 모드에서는 화면 아래에 모드 표시가 뜨고, 페이지를 옮겨 다녀도 모드가 유지됩니다.
 
 ## 구조
 
@@ -36,6 +41,7 @@ src/
     round.js         K개 동시 투하, 같은 칸 재투하
     stats.js         통계 계산
     menu.js          메뉴 이름 규칙, 기본 메뉴
+    search.js        한국어 메뉴 검색 (초성, 줄임말, 자모, 한영 오타)
     date.js          날짜 문자열 다루기
     settings.js      설정 기본값
   application/     유스케이스. domain만 씀
@@ -43,7 +49,8 @@ src/
   infrastructure/  바깥 세계와 연결. domain만 씀
     local-store.js   localStorage 저장소
     supabase-store.js Supabase REST 저장소
-    store.js         둘 중 하나를 고름 (config.js, ?local)
+    demo-store.js    예시 데이터 (메모리, 저장 안 함)
+    store.js         저장소를 고름 (config.js, ?local, ?demo)
     settings-storage.js  화면 설정 저장
   ui/              화면. application과 domain을 씀
     plinko/          플링코 페이지 (main.js가 조립, 나머지는 그리기와 입력)
@@ -64,7 +71,8 @@ npm test
 - `architecture`: 레이어 사이 의존 방향, domain과 application이 브라우저를 건드리지 않는지
 - `lunch`: 유스케이스 (기본 메뉴 채우기, 이름 중복, 기록, 미래 날짜 막기, 취소·되돌리기)
 - `supabase-store`: Supabase 요청 모양과 응답 읽기 (가짜 응답으로, 팀 DB는 건드리지 않음)
-- `round`: 물리를 헤드리스로 돌려 K개가 서로 다른 칸에 들어가는지, 붐비는 판도 끝나는지, 시작 위치가 결과를 정하지 않는지
+- `round`: 물리를 헤드리스로 돌려 K개가 서로 다른 칸에 들어가는지, 붐비는 판도 끝나는지, 시작 위치가 결과를 정하지 않는지, 칸에 들어간 뒤 1.2초 안에 결과가 나오는지
+- `search`: 메뉴 검색 (초성, 입력 중 글자, 줄임말, 한영 오타, 순위)
 - `stats`: 통계 계산 (취소 제외, 랭킹, 오래 안 간 곳, 요일·월 묶음)
 
 주소 뒤에 `?debug`를 붙이면 브라우저 콘솔에서 `window.__plinko`로 현재 상태를 읽을 수 있습니다.

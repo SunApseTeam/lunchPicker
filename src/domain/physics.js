@@ -19,6 +19,12 @@ const SETTLE_RADIUS = 5;
 const SETTLE_TIME = 0.35;
 const SHAKE_RADIUS = 10;
 const SHAKE_TIME = 0.8;
+// Once a ball is in a slot the outcome is decided, so its jiggle and sloshing die down fast and
+// a slow ball counts as settled sooner, instead of waiting out every tremor of the jelly.
+const SLOT_WOBBLE_DAMPING = 0.98;
+const SLOT_DRAG = 0.985;
+const CALM_SPEED = 80;
+const CALM_TIME = 0.15;
 
 export const GEOMETRY = {
   width: 1200,
@@ -146,6 +152,7 @@ export function dropBall(world, x, vx = 0) {
     bottom: y + R,
     bumpAt: -9,
     bounceAt: -9,
+    calmSince: 0,
     slotBounces: 0,
     shake: { x, y, since: world.time, count: 0 },
     still: { x, y, since: world.time },
@@ -502,7 +509,9 @@ function updateBall(world, b, emit) {
     b.lastZone = b.zone;
     b.enteredAt = now;
   }
-  const settled = b.zone !== null && stillFor(b.still, b, SETTLE_RADIUS, now) >= SETTLE_TIME;
+  if (b.zone === null || Math.hypot(b.vx, b.vy) > CALM_SPEED) b.calmSince = now;
+  const still = stillFor(b.still, b, SETTLE_RADIUS, now) >= SETTLE_TIME;
+  const settled = b.zone !== null && (still || now - b.calmSince >= CALM_TIME);
   if (settled && !b.settled) {
     b.settled = true;
     b.slot = b.zone;
@@ -585,11 +594,14 @@ export function stepWorld(world, emit = () => {}) {
       mx += p.x - p.px;
       my += p.y - p.py;
     }
-    mx = (mx / POINTS) * AIR_DRAG;
-    my = (my / POINTS) * AIR_DRAG;
+    const inSlot = b.zone !== null && world.time - b.bounceAt > 0.35;
+    const drag = inSlot ? SLOT_DRAG : AIR_DRAG;
+    const damping = inSlot ? physics.damping * SLOT_WOBBLE_DAMPING : physics.damping;
+    mx = (mx / POINTS) * drag;
+    my = (my / POINTS) * drag;
     for (const p of b.pts) {
-      const vx = mx + (p.x - p.px - mx) * physics.damping;
-      const vy = my + (p.y - p.py - my) * physics.damping;
+      const vx = mx + (p.x - p.px - mx) * damping;
+      const vy = my + (p.y - p.py - my) * damping;
       p.px = p.x;
       p.py = p.y;
       p.x += vx;

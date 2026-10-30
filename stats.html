@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>점심 기록</title>
+  <title>Sunapse 점심 기록</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -36,6 +36,14 @@
       color: var(--ink); background: var(--yellow); text-decoration: none; font-weight: 700;
       padding: 10px 16px; border-radius: 12px; white-space: nowrap;
     }
+    .wordmark { display: inline-block; background: var(--cream); border-radius: 8px; padding: 5px 10px 4px; margin-bottom: 10px; }
+    .wordmark img { display: block; height: 18px; width: auto; }
+    .mode-banner {
+      position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5;
+      max-width: calc(100% - 32px); padding: 8px 16px; border-radius: 999px;
+      background: var(--mint); color: var(--ink); font-size: 12px; font-weight: 700; white-space: nowrap;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); pointer-events: none;
+    }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
     .card { background: rgba(28, 30, 45, 0.85); border: 1px solid var(--line); border-radius: 20px; padding: 20px; min-width: 0; }
     .card.wide { grid-column: 1 / -1; }
@@ -44,9 +52,10 @@
     .empty { color: var(--muted); font-size: 14px; padding: 18px 0; text-align: center; }
     ul { list-style: none; margin: 0; padding: 0; }
 
-    .hbars li { display: grid; grid-template-columns: 22px minmax(64px, 7em) 1fr auto; align-items: center; gap: 10px; padding: 5px 0; }
+    .hbars li { display: grid; grid-template-columns: 30px minmax(64px, 7em) 1fr auto; align-items: center; gap: 10px; padding: 5px 0; }
     .hbars .rank { color: var(--muted); font-size: 13px; text-align: right; }
-    .hbars li:nth-child(-n+3) .rank { color: var(--yellow); font-weight: 700; }
+    .hbars .medal { display: block; width: 28px; height: 34px; margin: -6px 0 -4px auto; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45)); }
+    .hbars li.podium .name { font-weight: 700; font-size: 16px; }
     .hbars .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .hbars .track { height: 14px; }
     .hbars .bar { display: block; height: 100%; min-width: 4px; background: var(--yellow); border-radius: 0 4px 4px 0; }
@@ -113,10 +122,11 @@
   <div class="page">
     <header>
       <div>
+        <span class="wordmark"><img src="https://i.postimg.cc/Mp49v4Hd/wordmark-transparent-x1.png" alt="sunapse" width="81" height="24"></span>
         <h1>점심 <span>기록</span></h1>
         <p id="summary"></p>
       </div>
-      <a class="back" href="./">플링코 돌리러 가기</a>
+      <a class="back" href="./" data-keep-mode>플링코 돌리러 가기</a>
     </header>
     <div class="grid">
       <section class="card">

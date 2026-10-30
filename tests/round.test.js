@@ -83,3 +83,24 @@ test('the landing slot does not simply follow the starting position', () => {
   const corr = cov / (sd(starts, ms) * sd(ends, me));
   assert.ok(Math.abs(corr) < 0.3, `start/landing correlation ${corr.toFixed(2)} is weak`);
 });
+
+test('once a ball sits deep in a slot the result follows within about a second', () => {
+  const board = createBoard(equalWidths(8), physics.radius);
+  const lags = [];
+  for (let seed = 1; seed <= 30; seed++) {
+    const round = createRound(board, 1, mulberry32(seed), physics);
+    let t = 0;
+    let deepSince = null;
+    for (let i = 0; i < 30 / DT && !round.done; i++) {
+      stepRound(round);
+      t += DT;
+      const ball = round.world.balls[0];
+      const deep = ball.zone !== null && ball.bottom > board.dividerTop + 40;
+      if (!deep) deepSince = null;
+      else deepSince ??= t;
+    }
+    assert.ok(round.done, `drop ${seed} finished`);
+    lags.push(t - deepSince);
+  }
+  assert.ok(Math.max(...lags) < 1.2, `slowest wait after landing ${Math.max(...lags).toFixed(2)}s`);
+});
