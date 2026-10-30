@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { DEFAULT_SETTINGS } from '../src/domain/settings.js';
 import {
   DT,
+  boardWidth,
   createBoard,
   equalWidths,
   maxSlots,
@@ -141,4 +142,27 @@ test('every round can get its own bumper layout, and none of them traps a ball',
     assert.ok(round.done, `layout ${seed} finished`);
   }
   assert.ok(layouts.size > 25, `${layouts.size} different layouts`);
+});
+
+test('with few slots the board narrows, so a slot is about as wide for 2 as for 6', () => {
+  for (let n = 2; n <= 6; n++) {
+    const board = createBoard(equalWidths(n), physics.radius);
+    const slot = board.slotEdges[1] - board.slotEdges[0];
+    assert.equal(board.width, boardWidth(n));
+    assert.ok(slot >= 195 && slot <= 225, `${n} slots are ${slot.toFixed(0)}px wide`);
+    assert.ok(board.pegs.every((p) => p.x >= 0 && p.x <= board.width), `${n} slots: pegs stay on the board`);
+  }
+  assert.equal(boardWidth(9), 1200);
+});
+
+test('narrow boards finish even when nearly every slot gets a ball', () => {
+  for (let n = 2; n <= 5; n++) {
+    for (let seed = 1; seed <= 6; seed++) {
+      const rng = mulberry32(seed * 13 + n);
+      const round = createRound(createBoard(equalWidths(n), physics.radius, randomBumpers(rng, boardWidth(n))), Math.max(1, n - 1), rng, physics);
+      for (let i = 0; i < 120 / DT && !round.done; i++) stepRound(round);
+      assert.ok(round.done, `${n} slots, round ${seed} finished`);
+      assert.equal(new Set(round.winners).size, Math.max(1, n - 1));
+    }
+  }
 });

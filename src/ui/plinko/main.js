@@ -1,6 +1,6 @@
 import { createLunchService } from '../../application/lunch.js';
 import { todayString } from '../../domain/date.js';
-import { DT, createBoard, equalWidths, maxSlots, physicsFrom, randomBumpers } from '../../domain/physics.js';
+import { DT, boardWidth, createBoard, equalWidths, maxSlots, mulberry32, physicsFrom, randomBumpers } from '../../domain/physics.js';
 import { createRound, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
@@ -30,8 +30,11 @@ let menus = [];
 const candidateIds = new Set();
 let pickCount = 1;
 let slotMenus = [];
-let bumpers = randomBumpers(Math.random);
-let board = createBoard(equalWidths(2), settings.size, bumpers);
+// One seed per round: the layout stays put while candidates are toggled, and fits whatever
+// board width the slot count gives.
+let bumperSeed = Math.random() * 2 ** 32;
+const bumpersFor = (n) => randomBumpers(mulberry32(bumperSeed), boardWidth(n));
+let board = createBoard(equalWidths(2), settings.size, bumpersFor(2));
 
 // idle: board ready. running: balls in flight. result: winners shown, waiting for 확정 or 다시.
 let phase = { name: 'idle', round: null };
@@ -69,8 +72,8 @@ function rebuildBoard({ reshuffle = false } = {}) {
   if (!next) slotMenus = [{ name: '?' }, { name: '?' }];
   else if (same && !reshuffle) slotMenus = slotMenus.map((s) => next.find((m) => m.id === s.id));
   else slotMenus = shuffle(next);
-  if (reshuffle) bumpers = randomBumpers(Math.random);
-  board = createBoard(equalWidths(slotMenus.length), settings.size, bumpers);
+  if (reshuffle) bumperSeed = Math.random() * 2 ** 32;
+  board = createBoard(equalWidths(slotMenus.length), settings.size, bumpersFor(slotMenus.length));
   pickCount = Math.min(pickCount, maxPick());
 }
 
@@ -107,6 +110,14 @@ async function confirmResult() {
   } finally {
     saving = false;
   }
+}
+
+// Changing the candidates or the pick count while a result is up means the team wants another
+// go on new terms: the result closes unrecorded and a fresh board is set up. False while balls
+// are still falling.
+function leaveResult() {
+  if (phase.name === 'result') backToIdle();
+  return phase.name === 'idle';
 }
 
 function retry() {
@@ -168,8 +179,9 @@ function renderControls() {
   $('#candidate-count').textContent = n;
   $('#pick-count').textContent = pickCount;
   const idle = phase.name === 'idle';
-  $('#pick-minus').disabled = pickCount <= 1 || !idle;
-  $('#pick-plus').disabled = pickCount >= maxPick() || !idle;
+  const running = phase.name === 'running';
+  $('#pick-minus').disabled = pickCount <= 1 || running;
+  $('#pick-plus').disabled = pickCount >= maxPick() || running;
   const max = maxCandidates();
   const problem =
     n < 2
@@ -229,6 +241,7 @@ async function attempt(action) {
 
 const menuPanel = createMenuPanel({
   onToggle(id, checked) {
+    if (!leaveResult()) return;
     if (checked) candidateIds.add(id);
     else candidateIds.delete(id);
     rebuildBoard();
@@ -239,11 +252,13 @@ const menuPanel = createMenuPanel({
     await refreshMenus();
   },
   async onHide(id) {
+    if (!leaveResult()) return;
     candidateIds.delete(id);
     await attempt(() => lunch.setMenuHidden(id, true));
     await refreshMenus();
   },
   async onUnhide(id) {
+    if (!leaveResult()) return;
     candidateIds.add(id);
     await attempt(() => lunch.setMenuHidden(id, false));
     await refreshMenus();
@@ -255,6 +270,7 @@ const menuPanel = createMenuPanel({
     tagEditor.open(menu, menus);
   },
   async onAdd(name) {
+    if (!leaveResult()) return false;
     const added = await attempt(async () => candidateIds.add((await lunch.addMenu(name)).id));
     await refreshMenus();
     return added;
@@ -293,13 +309,16 @@ const settingsDialog = createSettingsDialog({
 });
 
 $('#pick-minus').addEventListener('click', () => {
+  if (!leaveResult()) return;
   pickCount = Math.max(1, pickCount - 1);
   renderControls();
 });
 $('#pick-plus').addEventListener('click', () => {
+  if (!leaveResult()) return;
   pickCount = Math.min(maxPick(), pickCount + 1);
   renderControls();
 });
+$('#result-close').addEventListener('click', leaveResult);
 $('#drop').addEventListener('click', drop);
 $('#confirm').addEventListener('click', confirmResult);
 $('#retry').addEventListener('click', retry);
@@ -307,14 +326,21 @@ $('#retry').addEventListener('click', retry);
 document.addEventListener('keydown', (e) => {
   if (settingsDialog.isOpen() || iconPicker.isOpen() || tagEditor.isOpen()) return;
   if (e.target instanceof Element && e.target.closest('input, textarea')) return;
-  // Space only ever means "drop"; never let it press whichever button holds focus.
+  // Space only ever means "drop", and on a result Enter only ever means "confirm": neither may
+  // press whichever button holds focus. Letter keys go by e.code so they work with the Korean
+  // IME on (R types ㄱ there).
   if (e.code === 'Space') {
     e.preventDefault();
     drop();
-  } else if (e.key === 'Enter' && phase.name === 'result' && e.target.tagName !== 'BUTTON') {
+  } else if (phase.name !== 'result') {
+    return;
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
     confirmResult();
-  } else if (e.code === 'KeyR' && phase.name === 'result') {
+  } else if (e.code === 'KeyR') {
     retry();
+  } else if (e.key === 'Escape' || e.code === 'KeyX') {
+    leaveResult();
   }
 });
 

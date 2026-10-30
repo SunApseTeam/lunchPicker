@@ -149,6 +149,17 @@
       max-width: calc(100% - 32px);
     }
     #result[hidden] { display: none; }
+    #result-close {
+      position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; padding: 0;
+      display: grid; place-items: center; background: none; border: 0; border-radius: 10px; color: var(--muted);
+    }
+    #result-close:hover { background: var(--panel); color: var(--text); }
+    .result-note { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
+    #result kbd {
+      display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 6px;
+      border: 1px solid currentColor; font: 600 11px/1.4 "IBM Plex Sans KR", sans-serif; opacity: .55; vertical-align: 2px;
+    }
+    .result-note kbd { margin: 0 2px; }
     @keyframes pop { from { transform: translate(-50%, -50%) scale(.6); opacity: 0; } }
     #result-title { margin: 0; color: var(--muted); font-size: 14px; letter-spacing: 1px; }
     #result-names { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 12px; margin: 10px 0 20px; }
@@ -261,9 +272,9 @@
     .dialog-foot button { border-radius: 12px; padding: 10px 16px; font-weight: 700; }
     #settings-reset { background: none; border: 1px solid var(--line); color: var(--muted); }
     #settings-close { background: var(--yellow); color: var(--ink); border: 0; }
-    body:not([data-phase="idle"]) #menu-list,
-    body:not([data-phase="idle"]) #add-form,
-    body:not([data-phase="idle"]) #hidden-wrap { opacity: .5; pointer-events: none; }
+    body[data-phase="running"] #menu-list,
+    body[data-phase="running"] #add-form,
+    body[data-phase="running"] #hidden-wrap { opacity: .5; pointer-events: none; }
     @media (max-width: 860px) {
       body { grid-template-columns: 1fr; grid-template-rows: 62vh auto; overflow: auto; }
       main { grid-row: 1; }
@@ -329,12 +340,16 @@
   <main>
     <canvas id="board" aria-label="플링코 보드"></canvas>
     <div id="result" hidden role="dialog" aria-labelledby="result-title">
+      <button id="result-close" aria-label="기록하지 않고 닫기" title="기록하지 않고 닫기 (X 또는 Esc)">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
       <p id="result-title">오늘의 점심은</p>
       <ul id="result-names"></ul>
       <div class="result-actions">
-        <button id="confirm">여기 간다!</button>
-        <button id="retry">다시 돌리기</button>
+        <button id="confirm">여기 간다! <kbd>Enter</kbd></button>
+        <button id="retry">다시 돌리기 <kbd>R</kbd></button>
       </div>
+      <p class="result-note"><kbd>X</kbd> 또는 <kbd>Esc</kbd>: 기록 없이 닫고 조건 바꾸기</p>
     </div>
   </main>
   <dialog id="settings" aria-labelledby="settings-title">

@@ -34,6 +34,7 @@ const CALM_SPEED = 80;
 const CALM_TIME = 0.15;
 
 export const GEOMETRY = {
+  // The widest board, used from six slots up. Fewer slots get a narrower one: see boardWidth.
   width: 1200,
   gravity: 2400,
   dropY: 90,
@@ -47,6 +48,7 @@ export const GEOMETRY = {
   dividerHalfWidth: 4,
 };
 const BUMPER_COUNT = 6;
+const PEG_MARGIN = 125;
 
 export function physicsFrom(settings) {
   const soft = settings.softness / 100;
@@ -74,29 +76,40 @@ export function equalWidths(n) {
   return Array.from({ length: n }, () => GEOMETRY.width / n);
 }
 
+// A board for few slots is narrower, so each slot stays about as wide as on the full board
+// (220px for two, 200px for six): picking from two should feel as tight as picking from six.
+// The width is always a whole number of peg gaps, so the lattice and its wall clearances are
+// the same at every size.
+export function boardWidth(slotCount) {
+  const g = GEOMETRY;
+  return Math.min(g.width, 2 * PEG_MARGIN + g.colGap * Math.max(1, slotCount - 1));
+}
+
 // Even rows leave 116px to the wall, wider than a ball. Odd rows stop well short of the
 // wall and get a half-round bump centred on it, which always pushes balls inward:
 // any gap narrower than a ball between a peg and the wall becomes a pocket.
-function pegColumns(g, row) {
-  const first = row % 2 === 1 ? 125 + g.colGap / 2 : 125;
+function pegColumns(width, row) {
+  const first = row % 2 === 1 ? PEG_MARGIN + GEOMETRY.colGap / 2 : PEG_MARGIN;
   const xs = [];
-  for (let x = first; x <= g.width - first + 1; x += g.colGap) xs.push(x);
+  for (let x = first; x <= width - first + 1; x += GEOMETRY.colGap) xs.push(x);
   return xs;
 }
 
-// Each round gets its own bumper layout. Bumpers skip the top row (straight under the drop)
-// and the bottom one (just over the slots), and an even row's outermost peg: a bumper there
-// narrows the wall gap below a big ball. No two bumpers touch, so their kicks never stack.
-export function randomBumpers(rng) {
+// Each round gets its own bumper layout, as many bumpers as the board is wide for. Bumpers skip
+// the top row (straight under the drop) and the bottom one (just over the slots), and an even
+// row's outermost peg: a bumper there narrows the wall gap below a big ball. No two bumpers
+// touch, so their kicks never stack.
+export function randomBumpers(rng, width = GEOMETRY.width) {
   const g = GEOMETRY;
   const spots = [];
   for (let row = 1; row < g.pegRows - 1; row++) {
-    for (const x of pegColumns(g, row)) {
-      if (row % 2 === 1 || (x > 125 && x < g.width - 125)) spots.push({ row, x });
+    for (const x of pegColumns(width, row)) {
+      if (row % 2 === 1 || (x > PEG_MARGIN && x < width - PEG_MARGIN)) spots.push({ row, x });
     }
   }
+  const count = Math.round((BUMPER_COUNT * width) / g.width);
   const picked = [];
-  while (picked.length < BUMPER_COUNT && spots.length > 0) {
+  while (picked.length < count && spots.length > 0) {
     const [spot] = spots.splice(Math.floor(rng() * spots.length), 1);
     if (picked.some((p) => Math.abs(p.row - spot.row) <= 1 && Math.abs(p.x - spot.x) <= g.colGap)) continue;
     picked.push(spot);
@@ -104,43 +117,45 @@ export function randomBumpers(rng) {
   return picked;
 }
 
-function buildPegs(g, bumpers) {
+function buildPegs(g, width, bumpers) {
   const pegs = [];
   for (let row = 0; row < g.pegRows; row++) {
     const y = g.pegTop + row * g.rowGap;
-    for (const x of pegColumns(g, row)) {
+    for (const x of pegColumns(width, row)) {
       const bumper = bumpers.some((b) => b.row === row && b.x === x);
       pegs.push({ x, y, r: bumper ? g.bumperRadius : g.pegRadius, kind: bumper ? 'bumper' : 'peg' });
     }
     if (row % 2 === 1) {
       pegs.push({ x: 0, y, r: g.wallBumpRadius, kind: 'wall' });
-      pegs.push({ x: g.width, y, r: g.wallBumpRadius, kind: 'wall' });
+      pegs.push({ x: width, y, r: g.wallBumpRadius, kind: 'wall' });
     }
   }
   return pegs;
 }
 
-// The layout the simulation tests run on.
+// The layout the simulation tests run on. On a narrower board the spots past its edge drop out.
 export const FIXED_BUMPERS = [
   { row: 1, x: 410 }, { row: 1, x: 790 }, { row: 3, x: 600 }, { row: 5, x: 220 }, { row: 5, x: 980 }, { row: 6, x: 505 },
 ];
 
 export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers = FIXED_BUMPERS) {
   const g = GEOMETRY;
+  const width = boardWidth(slotWidths.length);
   const total = slotWidths.reduce((a, b) => a + b, 0);
   const slotEdges = [0];
-  for (const w of slotWidths) slotEdges.push(slotEdges.at(-1) + (w / total) * g.width);
-  slotEdges[slotEdges.length - 1] = g.width;
+  for (const w of slotWidths) slotEdges.push(slotEdges.at(-1) + (w / total) * width);
+  slotEdges[slotEdges.length - 1] = width;
   const dividers = slotEdges.slice(1, -1);
   const pegBottom = g.pegTop + (g.pegRows - 1) * g.rowGap;
   const floorY = pegBottom + 180;
   // Dividers are lower than a ball is tall, in proportion to it, so balls of every size can
   // bounce over them about as often.
   const dividerTop = floorY - radius * DIVIDER_PER_RADIUS;
-  const pegs = buildPegs(g, bumpers);
+  const pegs = buildPegs(g, width, bumpers);
   const caps = dividers.map((x) => ({ x, y: dividerTop, r: g.dividerHalfWidth, kind: 'divider' }));
   return {
     ...g,
+    width,
     ballRadius: radius,
     pegs,
     obstacles: pegs.concat(caps),
