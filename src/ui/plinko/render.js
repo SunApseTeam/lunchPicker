@@ -5,9 +5,11 @@ export const SLOT_COLORS = [
   '#8c9eff', '#c38bff', '#ff8ad8', '#ff9f7a', '#b5e655', '#5ee7f0',
 ];
 const BALL_COLORS = ['#ffe066', '#4fd1c5', '#ff6b6b', '#8c9eff', '#ff8ad8'];
-const INK = '#14151f';
-const CREAM = '#f4ead5';
-const PINK = '#ff5d8f';
+const INK = '#1c1d26';
+const PEG = '#3b3d50';
+const MUTED = '#8a8c9c';
+const ACCENT = '#f96262';
+const PINK = '#ff4d7d';
 
 function hexToRgba(hex, alpha) {
   const n = parseInt(hex.slice(1), 16);
@@ -45,7 +47,7 @@ export function createRenderer(canvas) {
       if (event.target) flash.set(event.target, now);
       if (event.kind === 'bumper') burst(event.target.x, event.target.y, PINK, 12, 380);
     } else if (event.type === 'redrop') {
-      burst(event.ball.cx, event.ball.cy, CREAM, 24, 320);
+      burst(event.ball.cx, event.ball.cy, MUTED, 24, 320);
     }
   }
 
@@ -57,18 +59,18 @@ export function createRenderer(canvas) {
   }
 
   function drawBoard(board, slotMenus, winners, now) {
-    ctx.fillStyle = '#1c1e2d';
+    ctx.fillStyle = '#e9e6dd';
     ctx.beginPath();
     ctx.roundRect(-FRAME / 2, -FRAME / 2, board.width + FRAME, board.height + FRAME, 30);
     ctx.fill();
     const grad = ctx.createLinearGradient(0, 0, 0, board.floorY);
-    grad.addColorStop(0, '#20233a');
-    grad.addColorStop(1, '#171827');
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(1, '#f5f3ee');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, board.width, board.floorY);
 
     ctx.setLineDash([10, 16]);
-    ctx.strokeStyle = 'rgba(244, 234, 213, 0.16)';
+    ctx.strokeStyle = 'rgba(28, 29, 38, 0.15)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(40, board.dropY);
@@ -81,9 +83,9 @@ export function createRenderer(canvas) {
       const x1 = board.slotEdges[i + 1];
       const color = SLOT_COLORS[i % SLOT_COLORS.length];
       const won = winners?.includes(i);
-      ctx.fillStyle = hexToRgba(color, won ? 0.5 + 0.2 * Math.sin(now * 8) : 0.1);
+      ctx.fillStyle = hexToRgba(color, won ? 0.5 + 0.2 * Math.sin(now * 8) : 0.14);
       ctx.fillRect(x0, board.dividerTop, x1 - x0, board.floorY - board.dividerTop);
-      ctx.fillStyle = hexToRgba(color, won ? 0.95 : 0.25);
+      ctx.fillStyle = hexToRgba(color, won ? 0.95 : 0.35);
       ctx.fillRect(x0, board.floorY, x1 - x0, board.height - board.floorY);
       const max = x1 - x0 - 16;
       let size = 30;
@@ -95,12 +97,12 @@ export function createRenderer(canvas) {
       let label = slotMenus[i].name;
       while (ctx.measureText(label).width > max && label.length > 1) label = label.slice(0, -1);
       if (label !== slotMenus[i].name) label = label.slice(0, -1) + '…';
-      ctx.fillStyle = won ? INK : CREAM;
+      ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(label, (x0 + x1) / 2, (board.floorY + board.height) / 2);
     }
-    ctx.fillStyle = CREAM;
+    ctx.fillStyle = PEG;
     for (const x of board.dividers) {
       ctx.beginPath();
       ctx.roundRect(x - board.dividerHalfWidth, board.dividerTop - board.dividerHalfWidth, board.dividerHalfWidth * 2, board.floorY - board.dividerTop + board.dividerHalfWidth, board.dividerHalfWidth);
@@ -127,12 +129,12 @@ export function createRenderer(canvas) {
         continue;
       }
       if (glow > 0) {
-        ctx.fillStyle = `rgba(255, 224, 102, ${0.5 * glow})`;
+        ctx.fillStyle = hexToRgba(ACCENT, 0.45 * glow);
         ctx.beginPath();
         ctx.arc(peg.x, peg.y, peg.r + 14 * glow, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.fillStyle = glow > 0.5 ? '#fff4c2' : CREAM;
+      ctx.fillStyle = glow > 0.5 ? ACCENT : PEG;
       ctx.beginPath();
       ctx.arc(peg.x, peg.y, peg.r, 0, Math.PI * 2);
       ctx.fill();
@@ -160,8 +162,8 @@ export function createRenderer(canvas) {
     g.addColorStop(0, '#ffffff');
     g.addColorStop(0.3, color);
     g.addColorStop(1, hexToRgba(color, 0.85));
-    ctx.shadowColor = hexToRgba(color, 0.6);
-    ctx.shadowBlur = 24;
+    ctx.shadowColor = 'rgba(28, 29, 38, 0.22)';
+    ctx.shadowBlur = 16;
     ctx.fillStyle = g;
     ctx.fill();
     ctx.shadowBlur = 0;

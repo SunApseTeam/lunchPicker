@@ -9,43 +9,50 @@
   <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --ink: #14151f;
-      --panel: #1c1e2d;
-      --line: #2c2f45;
-      --cream: #f4ead5;
-      --muted: #9a9cb5;
-      --yellow: #ffe066;
-      --pink: #ff5d8f;
-      --mint: #4fd1c5;
+      color-scheme: light;
+      --bg: #f7f6f2;
+      --surface: #ffffff;
+      --panel: #f2f0ea;
+      --line: #e3e0d7;
+      --text: #1c1d26;
+      --muted: #6b6d7e;
+      --ink: #1c1d26;
+      --accent: #f96262;
+      --accent-text: #d1363c;
+      --yellow: #ffd84d;
+      --yellow-deep: #d9a900;
+      --pink: #ff4d7d;
+      --mint: #14b8a6;
+      --mint-text: #0f766e;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      background: radial-gradient(1200px 700px at 70% -10%, #2a2142 0%, transparent 60%), var(--ink);
+      background: radial-gradient(1200px 700px at 70% -10%, #fde6e2 0%, transparent 60%), var(--bg);
       background-attachment: fixed;
-      color: var(--cream);
+      color: var(--text);
       font: 15px/1.5 "IBM Plex Sans KR", system-ui, sans-serif;
     }
     .page { max-width: 1040px; margin: 0 auto; padding: 28px 16px 60px; }
     header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
     h1 { font: 400 38px/1 "Black Han Sans", sans-serif; margin: 0; letter-spacing: 1px; }
-    h1 span { color: var(--yellow); }
+    h1 span { color: var(--accent); }
     #summary { margin: 8px 0 0; color: var(--muted); }
-    #summary b { color: var(--cream); }
+    #summary b { color: var(--text); }
     .back {
       color: var(--ink); background: var(--yellow); text-decoration: none; font-weight: 700;
       padding: 10px 16px; border-radius: 12px; white-space: nowrap;
     }
-    .wordmark { display: inline-block; background: var(--cream); border-radius: 8px; padding: 5px 10px 4px; margin-bottom: 10px; }
-    .wordmark img { display: block; height: 18px; width: auto; }
+    .wordmark { display: inline-block; margin-bottom: 8px; }
+    .wordmark img { display: block; height: 22px; width: auto; }
     .mode-banner {
       position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5;
       max-width: calc(100% - 32px); padding: 8px 16px; border-radius: 999px;
       background: var(--mint); color: var(--ink); font-size: 12px; font-weight: 700; white-space: nowrap;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); pointer-events: none;
+      box-shadow: 0 8px 24px rgba(28, 29, 38, 0.2); pointer-events: none;
     }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-    .card { background: rgba(28, 30, 45, 0.85); border: 1px solid var(--line); border-radius: 20px; padding: 20px; min-width: 0; }
+    .card { background: var(--surface); box-shadow: 0 1px 3px rgba(28, 29, 38, 0.05); border: 1px solid var(--line); border-radius: 20px; padding: 20px; min-width: 0; }
     .card.wide { grid-column: 1 / -1; }
     h2 { font: 400 22px/1.1 "Black Han Sans", sans-serif; margin: 0 0 4px; letter-spacing: .5px; }
     .hint { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
@@ -54,32 +61,32 @@
 
     .hbars li { display: grid; grid-template-columns: 30px minmax(64px, 7em) 1fr auto; align-items: center; gap: 10px; padding: 5px 0; }
     .hbars .rank { color: var(--muted); font-size: 13px; text-align: right; }
-    .hbars .medal { display: block; width: 28px; height: 34px; margin: -6px 0 -4px auto; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45)); }
+    .hbars .medal { display: block; width: 28px; height: 34px; margin: -6px 0 -4px auto; filter: drop-shadow(0 2px 3px rgba(28, 29, 38, 0.25)); }
     .hbars li.podium .name { font-weight: 700; font-size: 16px; }
     .hbars .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .hbars .track { height: 14px; }
-    .hbars .bar { display: block; height: 100%; min-width: 4px; background: var(--yellow); border-radius: 0 4px 4px 0; }
+    .hbars .bar { display: block; height: 100%; min-width: 4px; background: var(--accent); border-radius: 0 4px 4px 0; }
     .hbars .val { font-weight: 700; min-width: 2.5em; text-align: right; }
 
     .stale li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
     .stale li:last-child { border-bottom: 0; }
     .stale .name { font-weight: 500; }
     .stale .ago { color: var(--muted); font-size: 14px; white-space: nowrap; }
-    .stale li.top .ago { color: var(--cream); font-weight: 700; }
-    .stale li.never .ago { color: var(--mint); font-weight: 700; }
+    .stale li.top .ago { color: var(--text); font-weight: 700; }
+    .stale li.never .ago { color: var(--mint-text); font-weight: 700; }
 
     .vbars { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; align-items: end; }
     .vbars .col { display: grid; grid-template-rows: auto 120px auto auto; justify-items: center; gap: 4px; min-width: 0; }
     .vbars .val { font-weight: 700; font-size: 14px; }
     .vbars .track { width: 100%; max-width: 44px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--line); }
-    .vbars .bar { display: block; width: 100%; min-height: 0; background: var(--yellow); border-radius: 4px 4px 0 0; }
+    .vbars .bar { display: block; width: 100%; min-height: 0; background: var(--accent); border-radius: 4px 4px 0 0; }
     .vbars .label { font-weight: 700; }
     .vbars .top { color: var(--muted); font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     #add-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
     #add-form input, #add-form select {
-      background: var(--panel); color: var(--cream); border: 1px solid var(--line); border-radius: 10px;
-      padding: 8px 10px; font: inherit; color-scheme: dark;
+      background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+      padding: 8px 10px; font: inherit;
     }
     #add-form select { flex: 1; min-width: 120px; }
     #add-form input:focus, #add-form select:focus { outline: 2px solid var(--mint); border-color: transparent; }
@@ -96,7 +103,7 @@
       background: none; border: 1px solid var(--line); border-radius: 999px; color: var(--muted);
       padding: 1px 10px; font: inherit; font-size: 12px; cursor: pointer;
     }
-    .visit button:hover { color: var(--cream); border-color: var(--muted); }
+    .visit button:hover { color: var(--text); border-color: var(--muted); }
     #more { margin-top: 12px; width: 100%; background: none; border: 1px dashed var(--line); color: var(--muted); border-radius: 12px; padding: 10px; font: inherit; cursor: pointer; }
     #more[hidden] { display: none; }
 

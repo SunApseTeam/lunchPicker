@@ -1,3 +1,4 @@
 .remember/
 .claude/
 node_modules/
+.playwright-mcp/
