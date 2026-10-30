@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { DEFAULT_SETTINGS } from '../src/domain/settings.js';
 import {
-  DEFAULT_SETTINGS,
   DT,
   createBoard,
   equalWidths,
@@ -9,8 +9,8 @@ import {
   minSlotWidth,
   mulberry32,
   physicsFrom,
-} from '../src/engine.js';
-import { createRound, stepRound } from '../src/round.js';
+} from '../src/domain/physics.js';
+import { createRound, stepRound } from '../src/domain/round.js';
 
 const physics = physicsFrom(DEFAULT_SETTINGS);
 

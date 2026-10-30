@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeStats, weekdayOf } from '../src/stats.js';
+import { weekdayOf } from '../src/domain/date.js';
+import { computeStats } from '../src/domain/stats.js';
 
 const menus = [
   { id: 'a', name: '국밥', hidden: false },

@@ -1,4 +1,4 @@
-import { DT, createWorld, dropBall, removeBall, stepWorld } from './engine.js';
+import { DT, createWorld, dropBall, removeBall, stepWorld } from './physics.js';
 
 const DROP_MARGIN = 30;
 

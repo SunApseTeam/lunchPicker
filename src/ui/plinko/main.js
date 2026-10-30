@@ -1,36 +1,46 @@
-import { DEFAULT_SETTINGS, DT, createBoard, equalWidths, maxSlots, physicsFrom } from './engine.js';
-import { createRound, stepRound } from './round.js';
-import { SLOT_COLORS, createRenderer } from './render.js';
+import { createLunchService } from '../../application/lunch.js';
+import { todayString } from '../../domain/date.js';
+import { DT, createBoard, equalWidths, maxSlots, physicsFrom } from '../../domain/physics.js';
+import { createRound, stepRound } from '../../domain/round.js';
+import { DEFAULT_SETTINGS } from '../../domain/settings.js';
+import { loadSettings, saveSettings } from '../../infrastructure/settings-storage.js';
+import { createStore } from '../../infrastructure/store.js';
+import { $, escapeHtml, toast } from '../shared/dom.js';
 import { createAudio } from './audio.js';
-import { createStore, loadSettings, saveSettings, todayString } from './store.js';
+import { createMenuPanel } from './menu-panel.js';
+import { SLOT_COLORS, createRenderer } from './render.js';
+import { createSettingsDialog } from './settings-dialog.js';
 
 const MAX_PICK = 5;
 const SLOWMO_SCALE = 0.4;
 
-const store = createStore();
+const lunch = createLunchService(createStore(), () => todayString());
 const audio = createAudio();
-const canvas = document.querySelector('#board');
+const canvas = $('#board');
 const renderer = createRenderer(canvas);
-const $ = (sel) => document.querySelector(sel);
 
 let settings = loadSettings(DEFAULT_SETTINGS);
 audio.setMuted(!settings.sound);
 let menus = [];
 const candidateIds = new Set();
 let pickCount = 1;
-let editingId = null;
 let slotMenus = [];
 let board = createBoard(equalWidths(2), settings.size);
-
-function maxCandidates() {
-  return maxSlots(settings.size);
-}
 
 // idle: board ready. running: balls in flight. result: winners shown, waiting for 확정 or 다시.
 let phase = { name: 'idle', round: null };
 let timeScale = 1;
 let accumulator = 0;
 let saving = false;
+
+const maxCandidates = () => maxSlots(settings.size);
+const candidates = () => menus.filter((m) => !m.hidden && candidateIds.has(m.id));
+const maxPick = () => Math.max(1, Math.min(MAX_PICK, candidates().length - 1));
+
+function candidatesValid() {
+  const n = candidates().length;
+  return n >= 2 && n <= maxCandidates();
+}
 
 function shuffle(list) {
   const a = [...list];
@@ -39,19 +49,6 @@ function shuffle(list) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
-}
-
-function candidates() {
-  return menus.filter((m) => !m.hidden && candidateIds.has(m.id));
-}
-
-function maxPick() {
-  return Math.max(1, Math.min(MAX_PICK, candidates().length - 1));
-}
-
-function candidatesValid() {
-  const n = candidates().length;
-  return n >= 2 && n <= maxCandidates();
 }
 
 // Slot indices in a finished round point into slotMenus, so only rebuild while idle.
@@ -89,7 +86,7 @@ async function confirmResult() {
   const picked = phase.round.winners.map((slot) => slotMenus[slot]);
   saving = true;
   try {
-    await store.addVisits(picked.map((m) => m.id), todayString(), 'spin');
+    await lunch.recordPicks(picked.map((m) => m.id));
     toast(`${picked.map((m) => m.name).join(', ')} 기록 완료. 맛있게 드세요!`);
     backToIdle();
   } catch (err) {
@@ -151,40 +148,6 @@ function frame(nowMs) {
   });
 }
 
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-}
-
-function renderMenus() {
-  const visible = menus.filter((m) => !m.hidden);
-  const hidden = menus.filter((m) => m.hidden);
-  $('#menu-list').innerHTML = visible
-    .map((m) => {
-      const checked = candidateIds.has(m.id) ? 'checked' : '';
-      const name =
-        editingId === m.id
-          ? `<input class="rename" data-id="${m.id}" value="${escapeHtml(m.name)}" maxlength="20" aria-label="메뉴 이름 수정">`
-          : `<button class="name" data-action="edit" data-id="${m.id}" title="눌러서 이름 수정">${escapeHtml(m.name)}</button>`;
-      return `<li class="${checked ? '' : 'off'}">
-        <label class="check"><input type="checkbox" data-action="toggle" data-id="${m.id}" ${checked} aria-label="${escapeHtml(m.name)} 오늘 후보"><span></span></label>
-        ${name}
-        <button class="ghost" data-action="hide" data-id="${m.id}" title="숨기기">숨김</button>
-      </li>`;
-    })
-    .join('');
-  $('#hidden-count').textContent = hidden.length;
-  $('#hidden-wrap').hidden = hidden.length === 0;
-  $('#hidden-list').innerHTML = hidden
-    .map((m) => `<li><span class="name">${escapeHtml(m.name)}</span><button class="ghost" data-action="unhide" data-id="${m.id}">다시 보이기</button></li>`)
-    .join('');
-  const input = $('#menu-list .rename');
-  if (input) {
-    input.focus();
-    input.select();
-  }
-  renderControls();
-}
-
 function renderControls() {
   const n = candidates().length;
   $('#candidate-count').textContent = n;
@@ -204,33 +167,6 @@ function renderControls() {
   $('#drop').textContent = phase.name === 'running' ? '떨어지는 중…' : pickCount > 1 ? `구슬 ${pickCount}개 떨어뜨리기` : '구슬 떨어뜨리기';
 }
 
-const SLIDERS = ['size', 'softness', 'bounce'];
-
-function renderSettings() {
-  for (const key of SLIDERS) {
-    $(`#set-${key}`).value = settings[key];
-    $(`#set-${key}-v`).textContent = settings[key];
-  }
-  $('#set-sound').checked = settings.sound;
-  $('#size-note').textContent = `이 크기로는 후보를 최대 ${maxCandidates()}개까지 넣을 수 있어요. 다음 판부터 적용돼요.`;
-}
-
-// Size changes the board geometry; keep today's slot order instead of reshuffling on every
-// slider tick, unless the current order no longer fits.
-function applySettings(next) {
-  const sizeChanged = next.size !== settings.size;
-  settings = next;
-  saveSettings(settings);
-  audio.setMuted(!settings.sound);
-  if (sizeChanged && phase.name === 'idle') {
-    const fits = candidatesValid() && slotMenus.length === candidates().length && slotMenus.every((m) => candidateIds.has(m.id));
-    if (fits) board = createBoard(equalWidths(slotMenus.length), settings.size);
-    else rebuildBoard();
-  }
-  renderSettings();
-  renderControls();
-}
-
 function renderResult() {
   const overlay = $('#result');
   if (phase.name !== 'result') {
@@ -246,23 +182,18 @@ function renderResult() {
   $('#confirm').focus();
 }
 
-let toastTimer = null;
-function toast(message, isError = false) {
-  const el = $('#toast');
-  el.textContent = message;
-  el.classList.toggle('error', isError);
-  el.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
-}
-
 // The shared store can be unreachable; keep the last list on screen and say why.
 async function loadMenus() {
   try {
-    menus = await store.listMenus();
+    menus = await lunch.listMenus();
   } catch (err) {
     toast(err.message, true);
   }
+}
+
+function renderMenus() {
+  menuPanel.render(menus, candidateIds);
+  renderControls();
 }
 
 async function refreshMenus() {
@@ -274,69 +205,61 @@ async function refreshMenus() {
 async function attempt(action) {
   try {
     await action();
+    return true;
   } catch (err) {
     toast(err.message, true);
+    return false;
   }
 }
 
-async function commitRename(input) {
-  const id = input.dataset.id;
-  const value = input.value;
-  editingId = null;
-  await attempt(() => store.renameMenu(id, value));
-  await refreshMenus();
-}
-
-$('#menu-list').addEventListener('click', (e) => {
-  const target = e.target.closest('[data-action]');
-  if (!target) return;
-  const id = target.dataset.id;
-  if (target.dataset.action === 'edit') {
-    editingId = id;
+const menuPanel = createMenuPanel({
+  onToggle(id, checked) {
+    if (checked) candidateIds.add(id);
+    else candidateIds.delete(id);
+    rebuildBoard();
     renderMenus();
-  } else if (target.dataset.action === 'hide') {
+  },
+  async onRename(id, name) {
+    await attempt(() => lunch.renameMenu(id, name));
+    await refreshMenus();
+  },
+  async onHide(id) {
     candidateIds.delete(id);
-    attempt(() => store.setHidden(id, true)).then(refreshMenus);
+    await attempt(() => lunch.setMenuHidden(id, true));
+    await refreshMenus();
+  },
+  async onUnhide(id) {
+    candidateIds.add(id);
+    await attempt(() => lunch.setMenuHidden(id, false));
+    await refreshMenus();
+  },
+  async onAdd(name) {
+    const added = await attempt(async () => candidateIds.add((await lunch.addMenu(name)).id));
+    await refreshMenus();
+    return added;
+  },
+});
+
+// Size changes the board geometry; keep today's slot order instead of reshuffling on every
+// slider tick, unless the current order no longer fits.
+function applySettings(next) {
+  const sizeChanged = next.size !== settings.size;
+  settings = next;
+  saveSettings(settings);
+  audio.setMuted(!settings.sound);
+  if (sizeChanged && phase.name === 'idle') {
+    const fits = candidatesValid() && slotMenus.length === candidates().length && slotMenus.every((m) => candidateIds.has(m.id));
+    if (fits) board = createBoard(equalWidths(slotMenus.length), settings.size);
+    else rebuildBoard();
   }
-});
+  settingsDialog.render();
+  renderControls();
+}
 
-$('#menu-list').addEventListener('change', (e) => {
-  if (e.target.dataset.action !== 'toggle') return;
-  if (e.target.checked) candidateIds.add(e.target.dataset.id);
-  else candidateIds.delete(e.target.dataset.id);
-  rebuildBoard();
-  renderMenus();
-});
-
-$('#menu-list').addEventListener('keydown', (e) => {
-  if (!e.target.classList.contains('rename')) return;
-  if (e.key === 'Enter') commitRename(e.target);
-  if (e.key === 'Escape') {
-    editingId = null;
-    renderMenus();
-  }
-});
-
-$('#menu-list').addEventListener('focusout', (e) => {
-  if (e.target.classList.contains('rename') && editingId) commitRename(e.target);
-});
-
-$('#hidden-list').addEventListener('click', (e) => {
-  const target = e.target.closest('[data-action="unhide"]');
-  if (!target) return;
-  candidateIds.add(target.dataset.id);
-  attempt(() => store.setHidden(target.dataset.id, false)).then(refreshMenus);
-});
-
-$('#add-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const input = $('#add-input');
-  await attempt(async () => {
-    const menu = await store.addMenu(input.value);
-    candidateIds.add(menu.id);
-    input.value = '';
-  });
-  await refreshMenus();
+const settingsDialog = createSettingsDialog({
+  settings: () => settings,
+  onChange: applySettings,
+  sizeNote: (s) => `이 크기로는 후보를 최대 ${maxSlots(s.size)}개까지 넣을 수 있어요. 다음 판부터 적용돼요.`,
 });
 
 $('#pick-minus').addEventListener('click', () => {
@@ -350,23 +273,9 @@ $('#pick-plus').addEventListener('click', () => {
 $('#drop').addEventListener('click', drop);
 $('#confirm').addEventListener('click', confirmResult);
 $('#retry').addEventListener('click', retry);
-const settingsDialog = $('#settings');
-for (const key of SLIDERS) {
-  $(`#set-${key}`).addEventListener('input', (e) => applySettings({ ...settings, [key]: Number(e.target.value) }));
-}
-$('#set-sound').addEventListener('change', (e) => applySettings({ ...settings, sound: e.target.checked }));
-$('#settings-reset').addEventListener('click', () => applySettings({ ...DEFAULT_SETTINGS }));
-$('#open-settings').addEventListener('click', () => {
-  renderSettings();
-  settingsDialog.showModal();
-});
-for (const id of ['#settings-close', '#settings-dismiss']) $(id).addEventListener('click', () => settingsDialog.close());
-settingsDialog.addEventListener('click', (e) => {
-  if (e.target === settingsDialog) settingsDialog.close();
-});
 
 document.addEventListener('keydown', (e) => {
-  if (settingsDialog.open) return;
+  if (settingsDialog.isOpen()) return;
   if (e.target instanceof Element && e.target.closest('input, textarea')) return;
   // Space only ever means "drop"; never let it press whichever button holds focus.
   if (e.code === 'Space') {
@@ -391,7 +300,7 @@ await loadMenus();
 for (const m of menus) if (!m.hidden) candidateIds.add(m.id);
 rebuildBoard();
 renderMenus();
-renderSettings();
+settingsDialog.render();
 setPhase({ name: 'idle', round: null });
 renderer.resize();
 requestAnimationFrame(frame);

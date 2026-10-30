@@ -1,15 +1,7 @@
-// Pure stats over the store's rows. Dates are 'YYYY-MM-DD' strings in local time.
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+import { WEEKDAYS, dayNumber, weekdayOf } from './date.js';
+
+// Pure stats over the store's rows.
 const MONTHS_SHOWN = 6;
-
-function dayNumber(date) {
-  const [y, m, d] = date.split('-').map(Number);
-  return Date.UTC(y, m - 1, d) / 86400000;
-}
-
-export function weekdayOf(date) {
-  return WEEKDAYS[new Date(dayNumber(date) * 86400000).getUTCDay()];
-}
 
 // The menu visited most in a bucket; ties go to the one visited most recently.
 function leader(visits, names) {

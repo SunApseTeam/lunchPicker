@@ -47,7 +47,7 @@ grilling 인터뷰로 확정한 내용 (2026-10-28).
 - 요일별 패턴: 월~금 횟수와 그 요일에 제일 많이 간 곳. 주말 기록이 있을 때만 토·일 표시
 - 월별 패턴: 최근 6개월 횟수와 그 달에 제일 많이 간 곳
 - 기록 타임라인: 날짜별로 묶어 14일씩 보여 줌. 취소·되돌리기·직접 추가도 여기서 (취소된 기록은 줄 긋고 남김)
-- 계산은 `src/stats.js`의 순수 함수 하나(`computeStats`)가 하고, 화면은 그 결과만 그림
+- 계산은 `src/domain/stats.js`의 순수 함수 하나(`computeStats`)가 하고, 화면은 그 결과만 그림
 
 ## 데이터 모델 (Supabase)
 ```
@@ -67,3 +67,11 @@ visits (id, menu_id → menus.id, visited_on date, source 'spin'|'manual',
 - 다른 기기에서 배포 주소(github.io)로 통계가 보이는지 확인
 - 헤드리스 시뮬레이션으로 시작 위치와 착지 위치의 상관이 약한지 확인 (`npm test`)
 - delete 요청이 RLS에 막히는지 확인
+
+## 코드 구조 (클린 아키텍처의 의존 규칙)
+- `domain` ← `application` ← `ui`, 그리고 `domain` ← `infrastructure`. 안쪽은 바깥을 모름
+- 규칙은 한 곳에만: 메뉴 이름 규칙, 기본 메뉴 채우기, 미래 날짜 막기는 유스케이스(`application/lunch.js`)와 domain에 있고, 저장소는 행을 읽고 쓰기만 함
+- 저장소 포트는 6개 메서드(메뉴·기록 각각 목록, 추가, 수정). localStorage와 Supabase 둘이 같은 포트를 구현
+- 각 페이지의 `main.js`가 조립 지점(composition root). 실제 저장소를 고르는 곳은 여기뿐
+- 규칙은 문서가 아니라 `tests/architecture.test.js`가 지킴
+- 일부러 하지 않은 것: 클래스마다 인터페이스, DTO 변환 계층, DI 컨테이너. 이 크기의 앱에서는 읽는 사람의 부담만 늘림

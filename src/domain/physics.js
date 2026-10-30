@@ -1,3 +1,5 @@
+import { DEFAULT_SETTINGS } from './settings.js';
+
 // Soft-body Plinko. Each ball is a ring of points kept round by skin, pressure and
 // shape-matching constraints (position-based dynamics), so it squishes against pegs.
 export const DT = 1 / 240;
@@ -32,8 +34,6 @@ export const GEOMETRY = {
   dividerHalfWidth: 4,
 };
 const BUMPERS = ['1:410', '1:790', '3:600', '5:220', '5:980', '6:505'];
-
-export const DEFAULT_SETTINGS = { size: 48, softness: 100, bounce: 60, sound: true };
 
 export function physicsFrom(settings) {
   const soft = settings.softness / 100;
