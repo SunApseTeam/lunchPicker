@@ -27,7 +27,9 @@ const renderer = createRenderer(canvas);
 let settings = loadSettings(DEFAULT_SETTINGS);
 audio.setMuted(!settings.sound);
 let menus = [];
-const candidateIds = new Set();
+// Today's candidates: place id -> how many slots it takes. A place more people want gets more
+// slots, so it is likelier to be picked, but it is still one place: see createRound's groups.
+const picks = new Map();
 let pickCount = 1;
 let slotMenus = [];
 // One seed per round: the layout stays put while candidates are toggled, and fits whatever
@@ -43,13 +45,15 @@ let accumulator = 0;
 let saving = false;
 
 const maxCandidates = () => maxSlots(settings.size);
-const candidates = () => menus.filter((m) => !m.hidden && candidateIds.has(m.id));
+const candidates = () => menus.filter((m) => !m.hidden && picks.has(m.id));
+const candidateSlots = () => candidates().flatMap((m) => Array(picks.get(m.id)).fill(m));
 const maxPick = () => Math.max(1, Math.min(MAX_PICK, candidates().length - 1));
 
 function candidatesValid() {
-  const n = candidates().length;
-  return n >= 2 && n <= maxCandidates();
+  return candidates().length >= 2 && candidateSlots().length <= maxCandidates();
 }
+
+const idsKey = (list) => list.map((m) => m.id).sort().join();
 
 function shuffle(list) {
   const a = [...list];
@@ -67,8 +71,8 @@ function shuffle(list) {
 // order when the candidates are the same.
 function rebuildBoard({ reshuffle = false } = {}) {
   if (phase.name !== 'idle') return;
-  const next = candidatesValid() ? candidates() : null;
-  const same = next && next.length === slotMenus.length && slotMenus.every((s) => next.some((m) => m.id === s.id));
+  const next = candidatesValid() ? candidateSlots() : null;
+  const same = next && idsKey(next) === idsKey(slotMenus);
   if (!next) slotMenus = [{ name: '?' }, { name: '?' }];
   else if (same && !reshuffle) slotMenus = slotMenus.map((s) => next.find((m) => m.id === s.id));
   else slotMenus = shuffle(next);
@@ -88,7 +92,7 @@ function drop() {
   if (phase.name !== 'idle' || !candidatesValid()) return;
   audio.unlock();
   accumulator = 0;
-  setPhase({ name: 'running', round: createRound(board, pickCount, Math.random, physicsFrom(settings)) });
+  setPhase({ name: 'running', round: createRound(board, pickCount, Math.random, physicsFrom(settings), slotMenus.map((m) => m.id)) });
 }
 
 function backToIdle() {
@@ -165,7 +169,7 @@ function frame(nowMs) {
   }
   renderer.draw({
     board,
-    balls: phase.round?.world.balls ?? [],
+    world: phase.round?.world,
     slotMenus,
     winners: phase.name === 'result' ? phase.round.winners : null,
     view: { mode: phase.name, slowmo },
@@ -176,7 +180,8 @@ function frame(nowMs) {
 
 function renderControls() {
   const n = candidates().length;
-  $('#candidate-count').textContent = n;
+  const slots = candidateSlots().length;
+  $('#candidate-count').textContent = slots > n ? `${n}곳 · 칸 ${slots}` : n;
   $('#pick-count').textContent = pickCount;
   const idle = phase.name === 'idle';
   const running = phase.name === 'running';
@@ -186,8 +191,8 @@ function renderControls() {
   const problem =
     n < 2
       ? '후보를 2개 이상 골라 주세요'
-      : n > max
-        ? `지금 구슬 크기로는 후보를 ${max}개까지 넣을 수 있어요`
+      : slots > max
+        ? `지금 구슬 크기로는 칸을 ${max}개까지 만들 수 있어요`
         : '';
   $('#drop-hint').textContent = problem;
   $('#drop').disabled = Boolean(problem) || !idle;
@@ -219,7 +224,7 @@ async function loadMenus() {
 }
 
 function renderMenus() {
-  menuPanel.render(menus, candidateIds);
+  menuPanel.render(menus, picks, candidateSlots().length >= maxCandidates());
   renderControls();
 }
 
@@ -242,8 +247,17 @@ async function attempt(action) {
 const menuPanel = createMenuPanel({
   onToggle(id, checked) {
     if (!leaveResult()) return;
-    if (checked) candidateIds.add(id);
-    else candidateIds.delete(id);
+    if (checked) picks.set(id, 1);
+    else picks.delete(id);
+    rebuildBoard();
+    renderMenus();
+  },
+  // One more (or one fewer) slot for a place, when more people want it.
+  onSlots(id, delta) {
+    if (!leaveResult() || !picks.has(id)) return;
+    const next = picks.get(id) + delta;
+    if (next < 1 || (delta > 0 && candidateSlots().length >= maxCandidates())) return;
+    picks.set(id, next);
     rebuildBoard();
     renderMenus();
   },
@@ -253,13 +267,13 @@ const menuPanel = createMenuPanel({
   },
   async onHide(id) {
     if (!leaveResult()) return;
-    candidateIds.delete(id);
+    picks.delete(id);
     await attempt(() => lunch.setMenuHidden(id, true));
     await refreshMenus();
   },
   async onUnhide(id) {
     if (!leaveResult()) return;
-    candidateIds.add(id);
+    picks.set(id, 1);
     await attempt(() => lunch.setMenuHidden(id, false));
     await refreshMenus();
   },
@@ -271,7 +285,7 @@ const menuPanel = createMenuPanel({
   },
   async onAdd(name) {
     if (!leaveResult()) return false;
-    const added = await attempt(async () => candidateIds.add((await lunch.addMenu(name)).id));
+    const added = await attempt(async () => picks.set((await lunch.addMenu(name)).id, 1));
     await refreshMenus();
     return added;
   },
@@ -346,7 +360,7 @@ document.addEventListener('keydown', (e) => {
 
 // ?debug exposes read-only state so a headless browser can check what is on screen.
 if (new URLSearchParams(location.search).has('debug')) {
-  window.__plinko = { phase: () => phase.name, balls: () => phase.round?.world.balls ?? [], visible: renderer.visible };
+  window.__plinko = { phase: () => phase.name, balls: () => phase.round?.world.balls ?? [], closed: () => [...(phase.round?.world.closed ?? [])], visible: renderer.visible };
 }
 
 new ResizeObserver(() => renderer.resize()).observe(canvas);

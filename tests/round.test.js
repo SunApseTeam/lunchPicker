@@ -5,12 +5,15 @@ import {
   DT,
   boardWidth,
   createBoard,
+  createWorld,
+  dropBall,
   equalWidths,
   maxSlots,
   minSlotWidth,
   mulberry32,
   physicsFrom,
   randomBumpers,
+  stepWorld,
 } from '../src/domain/physics.js';
 import { createRound, stepRound } from '../src/domain/round.js';
 
@@ -45,6 +48,52 @@ test('crowded rounds finish, with balls bouncing off settled ones and re-drops s
   }
   assert.ok(slotBounces > 0, 'a ball landing on a settled ball was flung off it');
   assert.ok(redrops > 0, 'same-slot landings were re-dropped');
+});
+
+test('two slots for the same place count as one: a second ball in either is re-dropped', () => {
+  // A place wanted twice gets two slots; picking two places must still name two different ones.
+  const groups = ['라순', '도이', '라순', '끝장', '도이'];
+  let redrops = 0;
+  for (let seed = 1; seed <= 15; seed++) {
+    const round = createRound(createBoard(equalWidths(groups.length), physics.radius), 3, mulberry32(seed), physics, groups);
+    for (let i = 0; i < 120 / DT && !round.done; i++) stepRound(round, (e) => (redrops += e.type === 'redrop'));
+    assert.ok(round.done, `round ${seed} finished`);
+    const places = round.winners.map((slot) => groups[slot]);
+    assert.equal(new Set(places).size, 3, `round ${seed} picked distinct places: ${places}`);
+  }
+  assert.ok(redrops > 0, 'landing in a second slot of a place already taken was re-dropped');
+});
+
+test('rounds with a place in several slots finish promptly: lids and claimed slots send balls on to free ones', () => {
+  // Balls once got wedged under the bottom pegs or held on a lid, and a wobbling claimed ball
+  // lost its place to a later one; each made rounds run on for a minute or more.
+  const layouts = [['A', 'A', 'B', 'A', 'C'], ['B', 'C', 'A', 'A', 'A']];
+  for (let seed = 1; seed <= 20; seed++) {
+    const groups = layouts[seed % 2];
+    const rng = mulberry32(seed);
+    const board = createBoard(equalWidths(5), physics.radius, randomBumpers(rng, boardWidth(5)));
+    const round = createRound(board, 2, rng, physics, groups);
+    for (let i = 0; i < 40 / DT && !round.done; i++) stepRound(round);
+    assert.ok(round.done, `round ${seed} finished within 40 s`);
+    assert.notEqual(groups[round.winners[0]], groups[round.winners[1]], `round ${seed} picked two places`);
+  }
+});
+
+test('no ball gets into a closed slot: one coming down on a lid slides off to an open slot', () => {
+  // Two neighbouring closed slots, dropped onto right over the divider between them: the case
+  // where a ball once rolled to and fro along the lids for good.
+  const board = createBoard(equalWidths(5), physics.radius, []);
+  const between = board.slotEdges[3];
+  let lidHits = 0;
+  for (let seed = 1; seed <= 12; seed++) {
+    const world = createWorld(board, mulberry32(seed), physics);
+    world.closed = new Set([2, 3]);
+    const ball = dropBall(world, between + (seed - 6) * 8, 0);
+    for (let i = 0; i < 20 / DT && !ball.settled; i++) stepWorld(world, (e) => (lidHits += e.kind === 'lid'));
+    assert.ok(ball.settled, `seed ${seed} settled within 20 s`);
+    assert.ok(!world.closed.has(ball.slot), `seed ${seed} stayed out of the closed slots (slot ${ball.slot})`);
+  }
+  assert.ok(lidHits > 0, 'some balls came down on a lid');
 });
 
 test('a single drop settles within 20 simulated seconds, at the softest and the firmest setting', () => {

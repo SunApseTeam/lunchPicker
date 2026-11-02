@@ -214,6 +214,13 @@
     }
     .tag-btn { flex: none; width: 28px; height: 28px; border: 1px dashed var(--line); border-radius: 8px; background: none; color: var(--muted); font-weight: 700; padding: 0; }
     .tag-btn:hover { color: var(--mint-text); border-color: var(--mint); }
+    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+    .meta:empty { display: none; }
+    .slots { flex: none; display: flex; align-items: center; gap: 2px; }
+    .slots button { width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--muted); font-weight: 700; font-size: 12px; line-height: 1; padding: 0; }
+    .slots button:hover:not(:disabled) { color: var(--accent-text); border-color: var(--accent); }
+    .slots button:disabled { opacity: .35; cursor: default; }
+    .slots b { padding: 0 3px; font-size: 12px; color: var(--accent-text); white-space: nowrap; }
     #tag-editor { width: min(420px, calc(100vw - 32px)); }
     .tag-body { padding: 10px 22px 0; }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }

@@ -27,6 +27,8 @@ export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   const camera = createCamera();
   const flash = new Map();
+  // slot -> when its lid started closing, so the lid can slide shut.
+  const lidAt = new Map();
   const ouch = new WeakMap();
   const particles = [];
   let width = 0;
@@ -85,7 +87,30 @@ export function createRenderer(canvas) {
     return `${cut}…`;
   }
 
-  function drawBoard(board, slotMenus, winners, now) {
+  // The other slots of a claimed place dim, and a lid slides in from both sides across their
+  // tops, where balls bounce off it.
+  function drawLids(world, now) {
+    if (!world) return;
+    const { board, closed } = world;
+    for (const slot of lidAt.keys()) if (!closed.has(slot)) lidAt.delete(slot);
+    for (const slot of closed) {
+      if (!lidAt.has(slot)) lidAt.set(slot, now);
+      const shut = Math.min(1, (now - lidAt.get(slot)) / 0.25);
+      const ease = 1 - (1 - shut) ** 3;
+      const x0 = board.slotEdges[slot];
+      const x1 = board.slotEdges[slot + 1];
+      ctx.fillStyle = `rgba(245, 243, 238, ${0.7 * ease})`;
+      ctx.fillRect(x0, board.dividerTop, x1 - x0, board.height - board.dividerTop);
+      const half = ((x1 - x0) / 2) * ease;
+      const mid = (x0 + x1) / 2;
+      ctx.fillStyle = PEG;
+      ctx.beginPath();
+      ctx.roundRect(mid - half, board.lidY - 8, half * 2, 12, 6);
+      ctx.fill();
+    }
+  }
+
+  function drawBoard(board, slotMenus, winners, world, now) {
     ctx.fillStyle = '#e9e6dd';
     ctx.beginPath();
     ctx.roundRect(-FRAME / 2, -FRAME / 2, board.width + FRAME, board.height + FRAME, 30);
@@ -151,6 +176,7 @@ export function createRenderer(canvas) {
       ctx.fill();
     }
     ctx.fillRect(0, board.floorY - 2, board.width, 4);
+    drawLids(world, now);
 
     ctx.save();
     ctx.beginPath();
@@ -358,13 +384,14 @@ export function createRenderer(canvas) {
     }
   }
 
-  function draw({ board, balls, slotMenus, winners, view, now, dt }) {
+  function draw({ board, world, slotMenus, winners, view, now, dt }) {
+    const balls = world?.balls ?? [];
     followCamera(camera, cameraTarget(board, view, balls, width, height), dt);
     const s = camera.scale;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - camera.x * s), dpr * (height / 2 - camera.y * s));
-    drawBoard(board, slotMenus, winners, now);
+    drawBoard(board, slotMenus, winners, world, now);
     for (const b of balls) drawBall(b, now);
     drawParticles(dt);
   }
