@@ -18,9 +18,10 @@ import {
 import { createRound, stepRound } from '../src/domain/round.js';
 
 const physics = physicsFrom(DEFAULT_SETTINGS);
+const players = (k, phys = physics) => Array.from({ length: k }, () => ({ physics: phys }));
 
 function runRound(n, k, seed, maxSeconds, widths = equalWidths(n), phys = physics) {
-  const round = createRound(createBoard(widths, phys.radius), k, mulberry32(seed), phys);
+  const round = createRound(createBoard(widths, phys.radius), players(k, phys), mulberry32(seed));
   const events = [];
   for (let i = 0; i < maxSeconds / DT && !round.done; i++) stepRound(round, (e) => events.push(e));
   return { round, events };
@@ -55,7 +56,7 @@ test('two slots for the same place count as one: a second ball in either is re-d
   const groups = ['라순', '도이', '라순', '끝장', '도이'];
   let redrops = 0;
   for (let seed = 1; seed <= 15; seed++) {
-    const round = createRound(createBoard(equalWidths(groups.length), physics.radius), 3, mulberry32(seed), physics, groups);
+    const round = createRound(createBoard(equalWidths(groups.length), physics.radius), players(3), mulberry32(seed), groups);
     for (let i = 0; i < 120 / DT && !round.done; i++) stepRound(round, (e) => (redrops += e.type === 'redrop'));
     assert.ok(round.done, `round ${seed} finished`);
     const places = round.winners.map((slot) => groups[slot]);
@@ -72,7 +73,7 @@ test('rounds with a place in several slots finish promptly: lids and claimed slo
     const groups = layouts[seed % 2];
     const rng = mulberry32(seed);
     const board = createBoard(equalWidths(5), physics.radius, randomBumpers(rng, boardWidth(5)));
-    const round = createRound(board, 2, rng, physics, groups);
+    const round = createRound(board, players(2), rng, groups);
     for (let i = 0; i < 40 / DT && !round.done; i++) stepRound(round);
     assert.ok(round.done, `round ${seed} finished within 40 s`);
     assert.notEqual(groups[round.winners[0]], groups[round.winners[1]], `round ${seed} picked two places`);
@@ -121,7 +122,7 @@ test('the landing slot does not simply follow the starting position', () => {
   const ends = [];
   // As in the game, every drop gets its own bumper layout.
   for (let i = 0; i < 150; i++) {
-    const round = createRound(createBoard(equalWidths(n), physics.radius, randomBumpers(rng)), 1, rng, physics);
+    const round = createRound(createBoard(equalWidths(n), physics.radius, randomBumpers(rng)), players(1), rng);
     starts.push(round.world.balls[0].cx);
     for (let s = 0; s < 40 / DT && !round.done; s++) stepRound(round);
     ends.push(round.world.balls[0].cx);
@@ -139,7 +140,7 @@ test('once a ball stops bouncing in a slot the result follows within about a sec
   const board = createBoard(equalWidths(8), physics.radius);
   const lags = [];
   for (let seed = 1; seed <= 30; seed++) {
-    const round = createRound(board, 1, mulberry32(seed), physics);
+    const round = createRound(board, players(1), mulberry32(seed));
     let t = 0;
     let lastBounce = 0;
     for (let i = 0; i < 30 / DT && !round.done; i++) {
@@ -159,7 +160,7 @@ test('a landed ball often bounces on into another slot', () => {
   let moved = 0;
   for (let seed = 1; seed <= 60; seed++) {
     const rng = mulberry32(seed);
-    const round = createRound(createBoard(equalWidths(6), physics.radius, randomBumpers(rng)), 1, rng, physics);
+    const round = createRound(createBoard(equalWidths(6), physics.radius, randomBumpers(rng)), players(1), rng);
     const ball = round.world.balls[0];
     let first = null;
     for (let i = 0; i < 30 / DT && !round.done; i++) {
@@ -186,7 +187,7 @@ test('every round can get its own bumper layout, and none of them traps a ball',
     }
     const board = createBoard(equalWidths(6), physics.radius, bumpers);
     assert.equal(board.pegs.filter((p) => p.kind === 'bumper').length, 8);
-    const round = createRound(board, 3, mulberry32(seed), physics);
+    const round = createRound(board, players(3), mulberry32(seed));
     for (let i = 0; i < 90 / DT && !round.done; i++) stepRound(round);
     assert.ok(round.done, `layout ${seed} finished`);
   }
@@ -208,7 +209,7 @@ test('narrow boards finish even when nearly every slot gets a ball', () => {
   for (let n = 2; n <= 5; n++) {
     for (let seed = 1; seed <= 6; seed++) {
       const rng = mulberry32(seed * 13 + n);
-      const round = createRound(createBoard(equalWidths(n), physics.radius, randomBumpers(rng, boardWidth(n))), Math.max(1, n - 1), rng, physics);
+      const round = createRound(createBoard(equalWidths(n), physics.radius, randomBumpers(rng, boardWidth(n))), players(Math.max(1, n - 1)), rng);
       for (let i = 0; i < 120 / DT && !round.done; i++) stepRound(round);
       assert.ok(round.done, `${n} slots, round ${seed} finished`);
       assert.equal(new Set(round.winners).size, Math.max(1, n - 1));

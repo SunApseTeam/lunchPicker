@@ -1,13 +1,17 @@
 import { createLunchService } from '../../application/lunch.js';
 import { todayString } from '../../domain/date.js';
-import { DT, boardWidth, createBoard, equalWidths, maxSlots, mulberry32, physicsFrom, randomBumpers } from '../../domain/physics.js';
+import { DT, boardWidth, createBoard, equalWidths, maxSlots, mulberry32, randomBumpers } from '../../domain/physics.js';
 import { createRound, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
+import { TEAM, memberPhysics } from '../../domain/team.js';
 import { loadSettings, saveSettings } from '../../infrastructure/settings-storage.js';
 import { createStore, storeMode } from '../../infrastructure/store.js';
+import { teamPhotoUrls } from '../../infrastructure/team-photos.js';
 import { $, escapeHtml, markMode, toast } from '../shared/dom.js';
 import { createAudio } from './audio.js';
+import { createBench } from './bench.js';
+import { createFaces } from './faces.js';
 import { createIconPicker } from './icon-picker.js';
 import { createMenuPanel } from './menu-panel.js';
 import { SLOT_COLORS, createRenderer } from './render.js';
@@ -23,6 +27,8 @@ markMode(mode);
 const audio = createAudio();
 const canvas = $('#board');
 const renderer = createRenderer(canvas);
+const bench = createBench(TEAM);
+const faces = createFaces(TEAM, teamPhotoUrls);
 
 let settings = loadSettings(DEFAULT_SETTINGS);
 audio.setMuted(!settings.sound);
@@ -30,7 +36,6 @@ let menus = [];
 // Today's candidates: place id -> how many slots it takes. A place more people want gets more
 // slots, so it is likelier to be picked, but it is still one place: see createRound's groups.
 const picks = new Map();
-let pickCount = 1;
 let slotMenus = [];
 // One seed per round: the layout stays put while candidates are toggled, and fits whatever
 // board width the slot count gives.
@@ -39,7 +44,8 @@ const bumpersFor = (n) => randomBumpers(mulberry32(bumperSeed), boardWidth(n));
 let board = createBoard(equalWidths(2), settings.size, bumpersFor(2));
 
 // idle: board ready. running: balls in flight. result: winners shown, waiting for 확정 or 다시.
-let phase = { name: 'idle', round: null };
+// members[i] is the team member who fell as player i of the round.
+let phase = { name: 'idle', round: null, members: [] };
 let timeScale = 1;
 let accumulator = 0;
 let saving = false;
@@ -48,6 +54,7 @@ const maxCandidates = () => maxSlots(settings.size);
 const candidates = () => menus.filter((m) => !m.hidden && picks.has(m.id));
 const candidateSlots = () => candidates().flatMap((m) => Array(picks.get(m.id)).fill(m));
 const maxPick = () => Math.max(1, Math.min(MAX_PICK, candidates().length - 1));
+const benchSpots = () => bench.spots(board, (m) => memberPhysics(settings, m).radius);
 
 function candidatesValid() {
   return candidates().length >= 2 && candidateSlots().length <= maxCandidates();
@@ -78,7 +85,6 @@ function rebuildBoard({ reshuffle = false } = {}) {
   else slotMenus = shuffle(next);
   if (reshuffle) bumperSeed = Math.random() * 2 ** 32;
   board = createBoard(equalWidths(slotMenus.length), settings.size, bumpersFor(slotMenus.length));
-  pickCount = Math.min(pickCount, maxPick());
 }
 
 function setPhase(next) {
@@ -88,15 +94,20 @@ function setPhase(next) {
   renderResult();
 }
 
+// The picked members fall from where they wait on the drop line.
 function drop() {
-  if (phase.name !== 'idle' || !candidatesValid()) return;
+  if (phase.name !== 'idle' || dropProblem()) return;
   audio.unlock();
   accumulator = 0;
-  setPhase({ name: 'running', round: createRound(board, pickCount, Math.random, physicsFrom(settings), slotMenus.map((m) => m.id)) });
+  const spots = benchSpots();
+  const members = bench.chosen();
+  const players = members.map((m) => ({ physics: memberPhysics(settings, m), x: spots.find((s) => s.member === m).x }));
+  setPhase({ name: 'running', round: createRound(board, players, Math.random, slotMenus.map((m) => m.id)), members });
 }
 
 function backToIdle() {
-  phase = { name: 'idle', round: null };
+  bench.reshuffle();
+  phase = { name: 'idle', round: null, members: [] };
   rebuildBoard({ reshuffle: true });
   setPhase(phase);
 }
@@ -116,7 +127,7 @@ async function confirmResult() {
   }
 }
 
-// Changing the candidates or the pick count while a result is up means the team wants another
+// Changing the candidates or who drops while a result is up means the team wants another
 // go on new terms: the result closes unrecorded and a fresh board is set up. False while balls
 // are still falling.
 function leaveResult() {
@@ -139,7 +150,7 @@ function onEngineEvent(event) {
   else if (event.type === 'done') {
     audio.win(event.winners.length);
     renderer.celebrate(board, event.winners);
-    setPhase({ name: 'result', round: phase.round });
+    setPhase({ ...phase, name: 'result' });
   }
 }
 
@@ -167,36 +178,43 @@ function frame(nowMs) {
   } else {
     timeScale = 1;
   }
+  const now = nowMs / 1000;
+  const away = new Set(phase.members.map((m) => m.id));
   renderer.draw({
     board,
     world: phase.round?.world,
     slotMenus,
     winners: phase.name === 'result' ? phase.round.winners : null,
     view: { mode: phase.name, slowmo },
-    now: nowMs / 1000,
+    now,
     dt,
+    bench: { spots: benchSpots(), isSelected: bench.isSelected, speech: bench.talk(now, away), away },
+    memberOf: (ball) => phase.members[ball.player],
+    faces,
   });
+}
+
+function dropProblem() {
+  const n = candidates().length;
+  const max = maxCandidates();
+  if (n < 2) return '후보를 2개 이상 골라 주세요';
+  if (candidateSlots().length > max) return `지금 구슬 크기로는 칸을 ${max}개까지 만들 수 있어요`;
+  if (bench.count() === 0) return '보드 위 팀원을 누르거나 1~6 키로 골라 주세요';
+  if (bench.count() > maxPick()) return `후보가 ${n}곳이라 ${maxPick()}명까지 떨어질 수 있어요`;
+  return '';
 }
 
 function renderControls() {
   const n = candidates().length;
   const slots = candidateSlots().length;
   $('#candidate-count').textContent = slots > n ? `${n}곳 · 칸 ${slots}` : n;
-  $('#pick-count').textContent = pickCount;
-  const idle = phase.name === 'idle';
-  const running = phase.name === 'running';
-  $('#pick-minus').disabled = pickCount <= 1 || running;
-  $('#pick-plus').disabled = pickCount >= maxPick() || running;
-  const max = maxCandidates();
-  const problem =
-    n < 2
-      ? '후보를 2개 이상 골라 주세요'
-      : slots > max
-        ? `지금 구슬 크기로는 칸을 ${max}개까지 만들 수 있어요`
-        : '';
+  const chosen = bench.chosen();
+  $('#pick-count').textContent = `${chosen.length}명`;
+  $('#pick-names').textContent = chosen.map((m) => m.name).join(', ');
+  const problem = dropProblem();
   $('#drop-hint').textContent = problem;
-  $('#drop').disabled = Boolean(problem) || !idle;
-  $('#drop').textContent = phase.name === 'running' ? '떨어지는 중…' : pickCount > 1 ? `구슬 ${pickCount}개 떨어뜨리기` : '구슬 떨어뜨리기';
+  $('#drop').disabled = Boolean(problem) || phase.name !== 'idle';
+  $('#drop').textContent = phase.name === 'running' ? '떨어지는 중…' : chosen.length > 1 ? `${chosen.length}명 떨어뜨리기` : '떨어뜨리기';
 }
 
 function renderResult() {
@@ -205,10 +223,14 @@ function renderResult() {
     overlay.hidden = true;
     return;
   }
-  const picked = phase.round.winners.map((slot) => ({ menu: slotMenus[slot], color: SLOT_COLORS[slot % SLOT_COLORS.length] }));
+  const picked = phase.round.winners.map((slot, i) => ({ menu: slotMenus[slot], color: SLOT_COLORS[slot % SLOT_COLORS.length], member: phase.members[i] }));
   $('#result-title').textContent = picked.length > 1 ? `오늘은 ${picked.length}곳으로 나눠 가요` : '오늘의 점심은';
   $('#result-names').innerHTML = picked
-    .map(({ menu, color }) => `<li style="--chip:${color}">${menuIcon(menu)} ${escapeHtml(menu.name)}</li>`)
+    .map(({ menu, color, member }) => {
+      const face = faces.url(member);
+      const who = `<span class="who">${face ? `<img src="${escapeHtml(face)}" alt="">` : ''}${escapeHtml(member.name)}</span>`;
+      return `<li style="--chip:${color}">${who}${menuIcon(menu)} ${escapeHtml(menu.name)}</li>`;
+    })
     .join('');
   overlay.hidden = false;
   $('#confirm').focus();
@@ -322,15 +344,22 @@ const settingsDialog = createSettingsDialog({
   sizeNote: (s) => `이 크기로는 후보를 최대 ${maxSlots(s.size)}개까지 넣을 수 있어요. 다음 판부터 적용돼요.`,
 });
 
-$('#pick-minus').addEventListener('click', () => {
-  if (!leaveResult()) return;
-  pickCount = Math.max(1, pickCount - 1);
+// Clicking a waiting member picks them for the next drop, or puts them back.
+function toggleMember(member) {
+  if (!member || !leaveResult()) return;
+  bench.toggle(member);
   renderControls();
-});
-$('#pick-plus').addEventListener('click', () => {
-  if (!leaveResult()) return;
-  pickCount = Math.min(maxPick(), pickCount + 1);
-  renderControls();
+}
+
+function memberAt(e) {
+  if (phase.name === 'running') return null;
+  const rect = canvas.getBoundingClientRect();
+  const p = renderer.toBoard(e.clientX - rect.left, e.clientY - rect.top);
+  return bench.hit(benchSpots(), p.x, p.y);
+}
+canvas.addEventListener('click', (e) => toggleMember(memberAt(e)));
+canvas.addEventListener('pointermove', (e) => {
+  canvas.style.cursor = memberAt(e) ? 'pointer' : '';
 });
 $('#result-close').addEventListener('click', leaveResult);
 $('#drop').addEventListener('click', drop);
@@ -346,6 +375,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
     e.preventDefault();
     drop();
+  } else if (/^Digit[1-9]$/.test(e.code) && phase.name !== 'running') {
+    toggleMember(bench.byKey(Number(e.code.slice(5))));
   } else if (phase.name !== 'result') {
     return;
   } else if (e.key === 'Enter') {
@@ -360,7 +391,15 @@ document.addEventListener('keydown', (e) => {
 
 // ?debug exposes read-only state so a headless browser can check what is on screen.
 if (new URLSearchParams(location.search).has('debug')) {
-  window.__plinko = { phase: () => phase.name, balls: () => phase.round?.world.balls ?? [], closed: () => [...(phase.round?.world.closed ?? [])], visible: renderer.visible };
+  window.__plinko = {
+    phase: () => phase.name,
+    balls: () => phase.round?.world.balls ?? [],
+    closed: () => [...(phase.round?.world.closed ?? [])],
+    visible: renderer.visible,
+    bench: () => benchSpots().map((s) => ({ id: s.member.id, x: s.x, y: s.y, r: s.r, picked: bench.isSelected(s.member) })),
+    members: () => phase.members.map((m) => m.id),
+    winners: () => phase.round?.winners ?? null,
+  };
 }
 
 new ResizeObserver(() => renderer.resize()).observe(canvas);
@@ -371,6 +410,6 @@ await loadMenus();
 rebuildBoard();
 renderMenus();
 settingsDialog.render();
-setPhase({ name: 'idle', round: null });
+setPhase({ name: 'idle', round: null, members: [] });
 renderer.resize();
 requestAnimationFrame(frame);

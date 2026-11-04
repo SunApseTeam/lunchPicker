@@ -242,8 +242,11 @@ export function createRenderer(canvas) {
     ctx.closePath();
   }
 
-  function drawBall(b, now) {
-    const color = BALL_COLORS[(b.id - 1) % BALL_COLORS.length];
+  // A member's ball wears their photo; anyone else (or a photo not loaded yet) the cartoon face.
+  function drawBall(b, now, member, faces) {
+    const photo = member && faces?.face(member);
+    if (photo) return drawPhotoBall(b, now, member, photo, faces.squish(member));
+    const color = member?.color ?? BALL_COLORS[(b.id - 1) % BALL_COLORS.length];
     blobPath(b.pts);
     const g = ctx.createRadialGradient(b.cx - b.R * 0.35, b.cy - b.R * 0.45, b.R * 0.1, b.cx, b.cy, b.R * 1.15);
     g.addColorStop(0, '#ffffff');
@@ -259,6 +262,93 @@ export function createRenderer(canvas) {
     ctx.stroke();
 
     drawFace(b, now);
+  }
+
+  // The photo is cut into a fan of triangles from the centre to each skin point and each piece is
+  // stretched onto its triangle, so the face squashes with the jelly. It turns only a little as
+  // the ball rolls, like the cartoon face, so a ball resting upside down still shows a face.
+  function drawPhoto(b, img, alpha) {
+    const tilt = 0.4 * Math.sin(b.angle);
+    const cos = Math.cos(b.angle - tilt);
+    const sin = Math.sin(b.angle - tilt);
+    const half = img.width / 2;
+    const k = half / b.R;
+    const uv = b.rest.map((q) => ({ u: half + (q.x * cos - q.y * sin) * k, v: half + (q.x * sin + q.y * cos) * k }));
+    const c = { x: b.cx, y: b.cy, u: half, v: half };
+    if (alpha <= 0) return;
+    ctx.globalAlpha *= alpha;
+    for (let i = 0; i < b.pts.length; i++) {
+      const j = (i + 1) % b.pts.length;
+      drawTriangle(img, c, { ...b.pts[i], ...uv[i] }, { ...b.pts[j], ...uv[j] });
+    }
+    ctx.globalAlpha /= alpha;
+  }
+
+  function drawTriangle(img, p0, p1, p2) {
+    const du1 = p1.u - p0.u;
+    const dv1 = p1.v - p0.v;
+    const du2 = p2.u - p0.u;
+    const dv2 = p2.v - p0.v;
+    const det = du1 * dv2 - du2 * dv1;
+    if (Math.abs(det) < 1e-6) return;
+    const dx1 = p1.x - p0.x;
+    const dy1 = p1.y - p0.y;
+    const dx2 = p2.x - p0.x;
+    const dy2 = p2.y - p0.y;
+    const a = (dx1 * dv2 - dx2 * dv1) / det;
+    const c = (dx2 * du1 - dx1 * du2) / det;
+    const b = (dy1 * dv2 - dy2 * dv1) / det;
+    const d = (dy2 * du1 - dy1 * du2) / det;
+    // Each piece is clipped a hair larger than its triangle so no hairline seams show.
+    const mx = (p0.x + p1.x + p2.x) / 3;
+    const my = (p0.y + p1.y + p2.y) / 3;
+    const grow = (p) => {
+      const l = Math.hypot(p.x - mx, p.y - my) || 1;
+      return { x: p.x + ((p.x - mx) / l) * 0.8, y: p.y + ((p.y - my) / l) * 0.8 };
+    };
+    const [q0, q1, q2] = [p0, p1, p2].map(grow);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(q0.x, q0.y);
+    ctx.lineTo(q1.x, q1.y);
+    ctx.lineTo(q2.x, q2.y);
+    ctx.closePath();
+    ctx.clip();
+    ctx.transform(a, b, c, d, p0.x - a * p0.u - c * p0.v, p0.y - b * p0.u - d * p0.v);
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+  }
+
+  function drawPhotoBall(b, now, member, photo, squish) {
+    blobPath(b.pts);
+    ctx.shadowColor = 'rgba(28, 29, 38, 0.25)';
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = member.color;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.save();
+    blobPath(b.pts);
+    ctx.clip();
+    drawPhoto(b, photo, 1);
+    const { mood, strength = 0 } = moodOf(b, now);
+    // The squeezed face fades in with the knock and out as the wince passes.
+    if (squish && mood === 'ouch') {
+      const o = ouch.get(b);
+      const left = 1 - (now - o.at) / winceTime(o.strength);
+      drawPhoto(b, squish, Math.min(1, 0.4 + strength) * Math.min(1, left * 3));
+    }
+    const gloss = ctx.createRadialGradient(b.cx - b.R * 0.4, b.cy - b.R * 0.5, b.R * 0.05, b.cx - b.R * 0.2, b.cy - b.R * 0.3, b.R * 1.1);
+    gloss.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+    gloss.addColorStop(0.35, 'rgba(255, 255, 255, 0.08)');
+    gloss.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = gloss;
+    ctx.fillRect(b.cx - b.R * 2, b.cy - b.R * 2, b.R * 4, b.R * 4);
+    ctx.restore();
+    blobPath(b.pts);
+    ctx.lineWidth = Math.max(3, b.R * 0.09);
+    ctx.strokeStyle = member.color;
+    ctx.stroke();
+    if (mood === 'ouch' && strength > 0.55) drawSweat(b.cx + b.R * 0.62, b.cy - b.R * 0.55, b.R * 0.15);
   }
 
   // A wince after every knock, wide eyes when falling fast, a grin once resting in a slot.
@@ -384,7 +474,109 @@ export function createRenderer(canvas) {
     }
   }
 
-  function draw({ board, world, slotMenus, winners, view, now, dt }) {
+  // A waiting member: a still ball that breathes, lifted and ringed when picked for the drop.
+  function benchBall(spot, now, picked) {
+    const wave = Math.sin(now * 3 + spot.x * 0.05);
+    const hop = picked ? -Math.abs(Math.sin(now * 5 + spot.x)) * spot.r * 0.18 : 0;
+    const sx = 1 + 0.035 * wave;
+    const sy = 1 - 0.035 * wave;
+    const cx = spot.x;
+    const cy = spot.y + hop + spot.r * (1 - sy);
+    const pts = [];
+    const rest = [];
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      rest.push({ x: Math.cos(a) * spot.r, y: Math.sin(a) * spot.r });
+      pts.push({ x: cx + Math.cos(a) * spot.r * sx, y: cy + Math.sin(a) * spot.r * sy });
+    }
+    return { id: 0, pts, rest, R: spot.r, cx, cy, angle: 0, vx: 0, vy: 0, zone: null, settled: false };
+  }
+
+  function drawBench(bench, now, faces) {
+    if (!bench) return;
+    const anyPicked = bench.spots.some((s) => bench.isSelected(s.member));
+    for (const spot of bench.spots) {
+      if (bench.away.has(spot.member.id)) continue;
+      const picked = bench.isSelected(spot.member);
+      const ball = benchBall(spot, now, picked);
+      ctx.globalAlpha = anyPicked && !picked ? 0.55 : 1;
+      drawBall(ball, now, spot.member, faces);
+      ctx.globalAlpha = 1;
+      if (picked) {
+        ctx.strokeStyle = ACCENT;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(ball.cx, ball.cy, spot.r + 7, 0, Math.PI * 2);
+        ctx.stroke();
+        const bx = ball.cx + spot.r * 0.72;
+        const by = ball.cy - spot.r * 0.72;
+        ctx.fillStyle = ACCENT;
+        ctx.beginPath();
+        ctx.arc(bx, by, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(bx - 5, by);
+        ctx.lineTo(bx - 1, by + 4);
+        ctx.lineTo(bx + 6, by - 4);
+        ctx.stroke();
+      }
+      ctx.font = `700 ${Math.min(22, Math.round(spot.r * 0.6))}px "IBM Plex Sans KR", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.strokeText(spot.member.name, spot.x, spot.y + spot.r + 8);
+      ctx.fillStyle = picked || !anyPicked ? INK : MUTED;
+      ctx.fillText(spot.member.name, spot.x, spot.y + spot.r + 8);
+    }
+    const said = bench.speech;
+    const spot = said && bench.spots.find((s) => s.member === said.member);
+    if (spot && !bench.away.has(spot.member.id)) drawBubble(said.line, spot, now - said.at);
+  }
+
+  // Pops in over the speaker's head and fades before the next one talks.
+  function drawBubble(text, spot, age) {
+    const pop = Math.min(1, age / 0.18);
+    const scale = 0.6 + 0.4 * (1 - (1 - pop) ** 3);
+    const fade = Math.max(0, Math.min(1, (2.5 - age) / 0.3));
+    if (fade <= 0) return;
+    ctx.font = '700 28px "IBM Plex Sans KR", sans-serif';
+    const w = ctx.measureText(text).width + 36;
+    const h = 54;
+    const tipY = spot.y - spot.r - 10;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.translate(spot.x, tipY);
+    ctx.scale(scale, scale);
+    // Keep the bubble on the board: near a wall it slides inward while the tail stays put.
+    const x = Math.min(Math.max(-w / 2, -spot.x + 8), board.width - spot.x - w - 8);
+    ctx.shadowColor = 'rgba(28, 29, 38, 0.18)';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.roundRect(x, -h - 10, w, h, 18);
+    ctx.moveTo(-10, -11);
+    ctx.lineTo(0, 0);
+    ctx.lineTo(10, -11);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = INK;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + w / 2, -h / 2 - 10);
+    ctx.restore();
+  }
+
+  // Screen point (CSS pixels on the canvas) to board coordinates.
+  function toBoard(sx, sy) {
+    return { x: camera.x + (sx - width / 2) / camera.scale, y: camera.y + (sy - height / 2) / camera.scale };
+  }
+
+  let board = null;
+  function draw({ board: current, world, slotMenus, winners, view, now, dt, bench, memberOf, faces }) {
+    board = current;
     const balls = world?.balls ?? [];
     followCamera(camera, cameraTarget(board, view, balls, width, height), dt);
     const s = camera.scale;
@@ -392,9 +584,10 @@ export function createRenderer(canvas) {
     ctx.clearRect(0, 0, width, height);
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - camera.x * s), dpr * (height / 2 - camera.y * s));
     drawBoard(board, slotMenus, winners, world, now);
-    for (const b of balls) drawBall(b, now);
+    drawBench(bench, now, faces);
+    for (const b of balls) drawBall(b, now, memberOf?.(b), faces);
     drawParticles(dt);
   }
 
-  return { resize, draw, onEvent, celebrate, visible: (ball) => onScreen(camera, ball, width, height) };
+  return { resize, draw, onEvent, celebrate, toBoard, visible: (ball) => onScreen(camera, ball, width, height) };
 }

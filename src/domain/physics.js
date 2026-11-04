@@ -50,8 +50,9 @@ export const GEOMETRY = {
   // The widest board, used from six slots up. Fewer slots get a narrower one: see boardWidth.
   width: 1200,
   gravity: 2400,
-  dropY: 90,
-  pegTop: 220,
+  // The band above the drop line holds the team's speech bubbles while they wait to drop.
+  dropY: 170,
+  pegTop: 300,
   pegRows: 8,
   rowGap: 125,
   colGap: 190,
@@ -232,9 +233,9 @@ function lidTilt(world, b) {
   return b.onLid ? towardFree(world, b.cx) * LID_TILT : 0;
 }
 
-export function dropBall(world, x, vx = 0) {
-  const R = world.physics.radius;
-  const y = world.board.dropY;
+// Each ball carries its own physics (size, softness, bounce), so team members can differ.
+export function dropBall(world, x, vx = 0, phys = world.physics, y = world.board.dropY) {
+  const R = phys.radius;
   const pts = [];
   const rest = [];
   for (let i = 0; i < POINTS; i++) {
@@ -246,6 +247,7 @@ export function dropBall(world, x, vx = 0) {
   }
   const ball = {
     id: world.nextId++,
+    phys,
     pts,
     rest,
     R,
@@ -707,7 +709,7 @@ function emitContacts(world, emit, before) {
 }
 
 export function stepWorld(world, emit = () => {}) {
-  const { physics, board } = world;
+  const { board } = world;
   const before = new Map(world.balls.map((b) => [b, b.touching]));
   const pairsBefore = world.touching;
   world.touching = new Set();
@@ -725,7 +727,7 @@ export function stepWorld(world, emit = () => {}) {
     const inSlot = b.zone !== null && world.time - b.bounceAt > 0.35;
     const tilt = lidTilt(world, b) * DT * DT;
     const drag = inSlot ? SLOT_DRAG : AIR_DRAG;
-    const damping = inSlot ? physics.damping * SLOT_WOBBLE_DAMPING : physics.damping;
+    const damping = inSlot ? b.phys.damping * SLOT_WOBBLE_DAMPING : b.phys.damping;
     mx = (mx / POINTS) * drag;
     my = (my / POINTS) * drag;
     for (const p of b.pts) {
@@ -738,7 +740,7 @@ export function stepWorld(world, emit = () => {}) {
     }
   }
   for (let k = 0; k < ITER; k++) {
-    for (const b of world.balls) constrain(b, physics);
+    for (const b of world.balls) constrain(b, b.phys);
     for (const b of world.balls) centroid(b);
     collideBalls(world);
     // Static obstacles get the last word: a neighbour shoving skin into a peg must not stick.

@@ -124,6 +124,7 @@
     }
     .stepper button:disabled { opacity: .35; cursor: default; }
     #pick-count { font: 400 26px/1 "Black Han Sans", sans-serif; color: var(--accent-text); min-width: 18px; text-align: center; }
+    #pick-names { margin: -6px 0 0; min-height: 1.3em; font-size: 13px; color: var(--muted); }
     #drop {
       font: 400 22px/1 "Black Han Sans", sans-serif;
       letter-spacing: 1px;
@@ -174,7 +175,10 @@
       background: var(--chip); color: var(--ink);
       padding: 6px 18px 4px; border-radius: 16px;
       white-space: nowrap;
+      display: flex; align-items: center; gap: 10px;
     }
+    #result-names .who { display: inline-flex; align-items: center; gap: 6px; font: 700 15px/1 "IBM Plex Sans KR", sans-serif; }
+    #result-names .who img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
     .result-actions { display: flex; gap: 10px; justify-content: center; }
     .result-actions button { border-radius: 12px; padding: 12px 22px; font-weight: 700; font-size: 16px; white-space: nowrap; }
     #confirm { background: var(--yellow); color: var(--ink); border: 0; }
@@ -339,13 +343,10 @@
     </section>
     <section class="controls">
       <div class="stepper">
-        <h2 style="margin:0">뽑을 개수</h2>
-        <div class="num">
-          <button id="pick-minus" aria-label="하나 줄이기">−</button>
-          <span id="pick-count">1</span>
-          <button id="pick-plus" aria-label="하나 늘리기">+</button>
-        </div>
+        <h2 style="margin:0">떨어질 사람</h2>
+        <span id="pick-count">0명</span>
       </div>
+      <p id="pick-names"></p>
       <button id="drop">구슬 떨어뜨리기</button>
       <p id="drop-hint" role="status"></p>
       <div class="foot">
