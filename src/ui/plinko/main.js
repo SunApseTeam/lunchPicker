@@ -393,7 +393,9 @@ const settingsDialog = createSettingsDialog({
 // Clicking a waiting member picks them for the next drop, or puts them back.
 function toggleMember(member) {
   if (!member || !leaveResult()) return;
-  bench.toggle(member, performance.now() / 1000);
+  // Picking past the limit swaps out the latest pick. Before two places are chosen there is no
+  // limit to go by yet but the usual cap.
+  bench.toggle(member, performance.now() / 1000, candidates().length >= 2 ? maxPick() : MAX_PICK);
   renderControls();
 }
 

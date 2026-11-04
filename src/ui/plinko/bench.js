@@ -54,16 +54,24 @@ export function createBench(team, rng = Math.random) {
     return list.find((s) => Math.hypot(s.x - x, s.y - y) <= s.r + 6)?.member ?? null;
   }
 
-  // Picked, a member answers at once; unpicked, they let the line drop.
-  function toggle(member, now) {
-    if (selected.has(member.id)) {
-      selected.delete(member.id);
-      if (said.get(member.id)?.when === 'pick') said.delete(member.id);
-      return;
-    }
+  function unpick(id) {
+    selected.delete(id);
+    if (said.get(id)?.when === 'pick') said.delete(id);
+  }
+
+  // At most `max` picks, kept newest last: past the limit, the latest earlier pick gives up
+  // their place to the new one. Picked, a member answers at once; unpicked, the line drops.
+  function toggle(member, now, max = Infinity) {
+    if (selected.has(member.id)) return unpick(member.id);
+    trim(max - 1);
     selected.add(member.id);
     say(member, 'pick', now);
     nextAt.set(member.id, now + LIFE.pick + pause());
+  }
+
+  // Drops the latest picks until no more than `max` remain.
+  function trim(max) {
+    while (selected.size > Math.max(0, max)) unpick([...selected].at(-1));
   }
 
   const live = (s, now) => s && now - s.at < s.life;
@@ -120,6 +128,7 @@ export function createBench(team, rng = Math.random) {
     bounds,
     hit,
     toggle,
+    trim,
     chatter,
     shout,
     shoutOf,
