@@ -4,7 +4,9 @@
 // falling ones call out what happens to them.
 const GAP = 18;
 // How long a bubble stays up, by situation. A win line stays until the next round.
-const LIFE = { wait: 2.2, drop: 1.4, bounce: 1.1, bump: 1.1, win: Infinity };
+const LIFE = { pick: 1.8, wait: 2.2, drop: 1.4, bounce: 1.1, bump: 1.1, win: Infinity };
+// Lines said while standing on the drop line, as opposed to while falling.
+const ON_LINE = new Set(['pick', 'wait']);
 // Knocks come thick and fast, so a member calls one out at most this often.
 const KNOCK_QUIET = 1.5;
 const KNOCKS = new Set(['bounce', 'bump']);
@@ -52,9 +54,16 @@ export function createBench(team, rng = Math.random) {
     return list.find((s) => Math.hypot(s.x - x, s.y - y) <= s.r + 6)?.member ?? null;
   }
 
-  function toggle(member) {
-    if (selected.has(member.id)) selected.delete(member.id);
-    else selected.add(member.id);
+  // Picked, a member answers at once; unpicked, they let the line drop.
+  function toggle(member, now) {
+    if (selected.has(member.id)) {
+      selected.delete(member.id);
+      if (said.get(member.id)?.when === 'pick') said.delete(member.id);
+      return;
+    }
+    selected.add(member.id);
+    say(member, 'pick', now);
+    nextAt.set(member.id, now + LIFE.pick + pause());
   }
 
   const live = (s, now) => s && now - s.at < s.life;
@@ -62,7 +71,7 @@ export function createBench(team, rng = Math.random) {
   // Waiting members talk whenever they feel like it, several at once. A line waits a moment if
   // its bubble would cover one already up. Members in `away` (falling now) do not chatter.
   function chatter(now, list, away, { lo, hi }) {
-    const up = list.filter((s) => live(said.get(s.member.id), now) && said.get(s.member.id).when === 'wait');
+    const up = list.filter((s) => live(said.get(s.member.id), now) && ON_LINE.has(said.get(s.member.id).when));
     // Where the bubble ends up: centred over the speaker, slid inward near a wall.
     const span = (s, line) => {
       const w = bubbleWidth(line);
@@ -86,7 +95,7 @@ export function createBench(team, rng = Math.random) {
       up.push(spot);
       nextAt.set(member.id, now + LIFE.wait + pause());
     }
-    return list.filter((s) => !away.has(s.member.id)).map((s) => said.get(s.member.id)).filter((s) => live(s, now) && s.when === 'wait');
+    return list.filter((s) => !away.has(s.member.id)).map((s) => said.get(s.member.id)).filter((s) => live(s, now) && ON_LINE.has(s.when));
   }
 
   function say(member, when, now, line = pick(member.lines[when])) {
@@ -103,7 +112,7 @@ export function createBench(team, rng = Math.random) {
 
   function shoutOf(member, now) {
     const s = member && said.get(member.id);
-    return live(s, now) && s.when !== 'wait' ? s : null;
+    return live(s, now) && !ON_LINE.has(s.when) ? s : null;
   }
 
   return {

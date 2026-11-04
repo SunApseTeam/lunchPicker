@@ -14,7 +14,7 @@ import { DEFAULT_TEAM, parseMember } from '../domain/team.js';
 //   insertVisits(rows)        rows: [{ menuId, visitedOn, source: 'spin' | 'manual' }]
 //   updateVisit(id, patch)    patch: { canceled }
 //   listMembers()             -> [{ id, name, color, scale, softness, bounce, lines, active }]
-//                             (lines: { wait, drop, bounce, bump, win }, each a list of strings)
+//                             (lines: { pick, wait, drop, bounce, bump, win }, each a list of strings)
 //
 // today() returns 'YYYY-MM-DD' so tests can pin the date.
 export function createLunchService(store, today) {

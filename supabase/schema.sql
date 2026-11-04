@@ -48,7 +48,7 @@ revoke delete, truncate on public.menus, public.visits from anon;
 
 -- 팀원: 보드 위에서 기다리다 구슬이 되어 떨어지는 사람들. Table Editor에서 직접 고칩니다.
 -- scale은 설정 크기에 곱하는 값(0.9~1), softness와 bounce는 설정값에 더하는 값입니다.
--- lines_* 는 상황별 말풍선 대사: 기다릴 때, 떨어질 때, 튕길 때, 서로 부딪힐 때, 결과.
+-- lines_* 는 상황별 말풍선 대사: 골랐을 때, 기다릴 때, 떨어질 때, 튕길 때, 서로 부딪힐 때, 결과.
 -- 사진은 Storage의 공개 team 버킷에 <id>.png (눌린 얼굴은 <id>-squish.png) 로 둡니다.
 create table if not exists public.members (
   id text primary key check (id ~ '^[a-z0-9-]{1,30}$'),
@@ -57,6 +57,7 @@ create table if not exists public.members (
   scale numeric(3, 2) not null default 1 check (scale between 0.9 and 1),
   softness integer not null default 0 check (softness between -100 and 100),
   bounce integer not null default 0 check (bounce between -100 and 100),
+  lines_pick text[] not null default '{}',
   lines_wait text[] not null default '{}',
   lines_drop text[] not null default '{}',
   lines_bounce text[] not null default '{}',
@@ -65,6 +66,9 @@ create table if not exists public.members (
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+-- Projects created before pick lines existed.
+alter table public.members add column if not exists lines_pick text[] not null default '{}';
 
 -- 팀원 목록은 누구나 읽기만 합니다. 고치는 건 Supabase 대시보드에서.
 alter table public.members enable row level security;
@@ -81,3 +85,9 @@ insert into public.members (id, name, color, scale, softness, bounce, lines_wait
   ('eunseol', '조은설', '#c38bff', 0.92, 0, -10, array['가볍게 먹을래요', '새로운 데 가 봐요', '디저트도?'], array['살살 가요', '어디 가지?', '두근두근'], array['앗!', '어머!', '아이고'], array['어머 죄송해요', '살살요!', '깜짝이야'], array['괜찮네요', '좋아요!', '디저트도 먹어요']),
   ('beomgyu', '최범규', '#4fd1c5', 0.98, -20, 10, array['점심 시간이다!', '매운 거 어때요', '줄 안 서는 데로'], array['가즈아!', '갑니다~', '맵게 가자'], array['오잉?', '하하!', '어지러워'], array['길 막지 마~', '충돌!', '하하 미안'], array['여기다!', '줄 없겠지?', '맛있겠다'])
 on conflict (id) do nothing;
+update public.members set lines_pick = array['저요!', '맡겨 주세요', '좋아, 가 보자'] where id = 'jungwon' and lines_pick = '{}';
+update public.members set lines_pick = array['나야 나!', '고기 각이다', '오예!'] where id = 'dongwon' and lines_pick = '{}';
+update public.members set lines_pick = array['제가 가죠', '든든하게 다녀올게요', '믿어 보세요'] where id = 'sungmin' and lines_pick = '{}';
+update public.members set lines_pick = array['야호, 나다!', '빨리 던져 줘요', '준비 완료!'] where id = 'junhyuk' and lines_pick = '{}';
+update public.members set lines_pick = array['저요?', '잘 골라 볼게요', '두근두근…'] where id = 'eunseol' and lines_pick = '{}';
+update public.members set lines_pick = array['드디어!', '매운 데로 갈게요', '가즈아 준비'] where id = 'beomgyu' and lines_pick = '{}';

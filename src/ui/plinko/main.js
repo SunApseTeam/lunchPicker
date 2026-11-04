@@ -393,7 +393,7 @@ const settingsDialog = createSettingsDialog({
 // Clicking a waiting member picks them for the next drop, or puts them back.
 function toggleMember(member) {
   if (!member || !leaveResult()) return;
-  bench.toggle(member);
+  bench.toggle(member, performance.now() / 1000);
   renderControls();
 }
 
