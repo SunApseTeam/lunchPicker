@@ -43,14 +43,13 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-// Newer sb_secret_ keys go in the apikey header alone; a legacy service_role key also works as a
-// bearer token. Try the first and fall back to the second.
-async function upload(name, body) {
-  const url = `${SUPABASE_URL}/storage/v1/object/team/${name}`;
-  const base = { apikey: key, 'Content-Type': 'image/png', 'x-upsert': 'true', 'Cache-Control': 'max-age=300' };
-  let res = await fetch(url, { method: 'POST', headers: base, body });
-  if (res.status === 401 || res.status === 403) res = await fetch(url, { method: 'POST', headers: { ...base, Authorization: `Bearer ${key}` }, body });
-  return res;
+// Storage insists on an Authorization header as well as apikey; both carry the key.
+function upload(name, body) {
+  return fetch(`${SUPABASE_URL}/storage/v1/object/team/${name}`, {
+    method: 'POST',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'image/png', 'x-upsert': 'true', 'Cache-Control': 'max-age=300' },
+    body,
+  });
 }
 
 let failed = 0;
