@@ -1,6 +1,7 @@
 import { menuIcon } from '../../domain/icon.js';
 import { BUBBLE_FONT } from './bench.js';
 import { FRAME, cameraTarget, createCamera, followCamera, onScreen } from './camera.js';
+import { createMeadow } from './meadow.js';
 
 export const SLOT_COLORS = [
   '#ff6b6b', '#ffb347', '#ffe066', '#7bd389', '#4fd1c5', '#5ab8ff',
@@ -29,6 +30,7 @@ function hexToRgba(hex, alpha) {
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   const camera = createCamera();
+  const meadow = createMeadow();
   const flash = new Map();
   // slot -> when its lid started closing, so the lid can slide shut.
   const lidAt = new Map();
@@ -643,6 +645,7 @@ export function createRenderer(canvas) {
     const s = camera.scale;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
+    meadow.draw(ctx, width, height, now, dpr);
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - camera.x * s), dpr * (height / 2 - camera.y * s));
     drawBoard(board, slotMenus, winners, world, now, span);
     drawBench(bench, now, faces);
