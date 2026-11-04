@@ -20,7 +20,7 @@ test('a write answered with 201 and no body succeeds', async () => {
   await store().insertVisits([{ menuId: 'm1', visitedOn: '2026-10-30', source: 'spin' }]);
   assert.equal(calls[0].url, 'https://x.supabase.co/rest/v1/visits');
   assert.equal(calls[0].headers.apikey, 'sb_publishable_test');
-  assert.deepEqual(calls[0].body, [{ menu_id: 'm1', visited_on: '2026-10-30', source: 'spin' }]);
+  assert.deepEqual(calls[0].body, [{ menu_id: 'm1', member_id: null, visited_on: '2026-10-30', source: 'spin' }]);
 });
 
 test('rows come back in the app shape, read page by page', async () => {
@@ -28,7 +28,7 @@ test('rows come back in the app shape, read page by page', async () => {
   const calls = fakeFetch((url) => Response.json(url.includes('offset=0') ? Array(1000).fill(row) : [row]));
   const visits = await store().listVisits();
   assert.equal(visits.length, 1001);
-  assert.deepEqual(visits[0], { id: 'v1', menuId: 'm1', visitedOn: '2026-10-30', source: 'spin', canceled: false, createdAt: 't' });
+  assert.deepEqual(visits[0], { id: 'v1', menuId: 'm1', memberId: null, visitedOn: '2026-10-30', source: 'spin', canceled: false, createdAt: 't' });
   assert.equal(calls.length, 2);
 });
 
@@ -64,4 +64,16 @@ test('team members come back with their lines grouped by situation', async () =>
   assert.match(calls[0].url, /\/rest\/v1\/members\?select=\*/);
   assert.deepEqual(m.lines, { pick: ['p'], wait: ['a'], drop: ['b'], bounce: ['c'], bump: ['d'], win: ['e'] });
   assert.equal(m.active, true);
+});
+
+test('a visit keeps who took the team there, and moving it sends the column name', async () => {
+  let calls = fakeFetch(() => new Response(null, { status: 201 }));
+  await store().insertVisits([{ menuId: 'm1', memberId: 'jungwon', visitedOn: '2026-10-30', source: 'spin' }]);
+  assert.equal(calls[0].body[0].member_id, 'jungwon');
+  calls = fakeFetch(() => new Response(null, { status: 204 }));
+  await store().updateVisit('v1', { menuId: 'm2' });
+  assert.deepEqual(calls[0].body, { menu_id: 'm2' });
+  assert.equal(calls[0].method, 'PATCH');
+  fakeFetch(() => Response.json([{ id: 'v1', menu_id: 'm1', visited_on: 'd', source: 'spin', canceled: false, created_at: 't' }]));
+  assert.equal((await store().listVisits())[0].memberId, null, 'older rows have no member');
 });

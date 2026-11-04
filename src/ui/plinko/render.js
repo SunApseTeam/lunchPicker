@@ -47,6 +47,13 @@ export function createRenderer(canvas) {
   const lidAt = new Map();
   const ouch = new WeakMap();
   const particles = [];
+  // Clicks on the scene, for show only: the physics never feels them. pokes: peg -> { at, s },
+  // how hard it was nudged; ripples spread from where the click landed; jiggles: member id ->
+  // when a waiting member was clicked.
+  const pokes = new Map();
+  const ripples = [];
+  const jiggles = new Map();
+  const POKE_REACH = 200;
   let width = 0;
   let height = 0;
   let dpr = 1;
@@ -101,6 +108,46 @@ export function createRenderer(canvas) {
     let cut = text;
     while (cut.length > 1 && ctx.measureText(`${cut}…`).width > max) cut = cut.slice(0, -1);
     return `${cut}…`;
+  }
+
+  // How far a poked peg is swung right now: a quick spring that dies away within a second.
+  function wobble(peg, now) {
+    const p = pokes.get(peg);
+    if (!p) return 0;
+    const t = now - p.at;
+    if (t > 1) {
+      pokes.delete(peg);
+      return 0;
+    }
+    return p.s * Math.exp(-5 * t) * Math.sin(26 * t);
+  }
+
+  // Draws fn with the peg swung and swelled by its wobble.
+  function wobbled(peg, now, fn) {
+    const w = wobble(peg, now);
+    if (w === 0) return fn();
+    ctx.save();
+    ctx.translate(peg.x, peg.y);
+    ctx.rotate(w * 0.5);
+    ctx.scale(1 + 0.3 * w, 1 + 0.3 * w);
+    ctx.translate(-peg.x, -peg.y);
+    fn();
+    ctx.restore();
+  }
+
+  function drawRipples(now) {
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const t = (now - ripples[i].at) / 0.6;
+      if (t >= 1) {
+        ripples.splice(i, 1);
+        continue;
+      }
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * (1 - t)})`;
+      ctx.lineWidth = 5 * (1 - t) + 1;
+      ctx.beginPath();
+      ctx.arc(ripples[i].x, ripples[i].y, 20 + POKE_REACH * 0.9 * t, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   // The other slots of a claimed place dim, and a lid slides in from both sides across their
@@ -212,10 +259,13 @@ export function createRenderer(canvas) {
 
     for (const peg of board.pegs) {
       const glow = Math.max(0, 1 - (now - (flash.get(peg) ?? -10)) / 0.35);
-      if (peg.kind === 'bumper') drawBumper(peg, now - (flash.get(peg) ?? -10), now, glow);
-      else if (peg.kind === 'wall') drawBushPuff(peg, board, glow);
-      else drawFlowerPeg(peg, glow);
+      wobbled(peg, now, () => {
+        if (peg.kind === 'bumper') drawBumper(peg, now - (flash.get(peg) ?? -10), now, glow);
+        else if (peg.kind === 'wall') drawBushPuff(peg, board, glow);
+        else drawFlowerPeg(peg, glow);
+      });
     }
+    drawRipples(now);
   }
 
   // A peg is a little white flower with a dark-inked rim; a knock blushes it pink for a moment.
@@ -646,9 +696,11 @@ export function createRenderer(canvas) {
   // A waiting member: a still ball that breathes, lifted and ringed when picked for the drop.
   function benchBall(spot, now, picked) {
     const wave = Math.sin(now * 3 + spot.x * 0.05);
-    const hop = picked ? -Math.abs(Math.sin(now * 5 + spot.x)) * spot.r * 0.18 : 0;
-    const sx = 1 + 0.035 * wave;
-    const sy = 1 - 0.035 * wave;
+    const since = now - (jiggles.get(spot.member.id) ?? -10);
+    const jig = since < 1 ? Math.exp(-5 * since) * Math.sin(30 * since) : 0;
+    const hop = (picked ? -Math.abs(Math.sin(now * 5 + spot.x)) * spot.r * 0.18 : 0) - Math.max(0, jig) * spot.r * 0.35;
+    const sx = 1 + 0.035 * wave + 0.16 * jig;
+    const sy = 1 - 0.035 * wave - 0.16 * jig;
     const cx = spot.x;
     const cy = spot.y + hop + spot.r * (1 - sy);
     const pts = [];
@@ -815,5 +867,24 @@ export function createRenderer(canvas) {
     drawParticles(dt);
   }
 
-  return { resize, draw, onEvent, celebrate, toBoard, visible: (ball) => onScreen(camera, ball, width, height) };
+  // A click on the scene at screen point (sx, sy): a ripple, a puff of petals, and the flowers,
+  // blossoms and bushes nearby swing, the nearer the harder.
+  function poke(sx, sy, now) {
+    if (!board) return;
+    const p = toBoard(sx, sy);
+    ripples.push({ ...p, at: now });
+    for (const peg of board.pegs) {
+      const d = Math.hypot(peg.x - p.x, peg.y - p.y);
+      if (d < POKE_REACH) pokes.set(peg, { at: now, s: 1 - d / POKE_REACH });
+    }
+    burst(p.x, p.y, '#ffffff', 6, 260);
+    burst(p.x, p.y, '#ffc4d4', 6, 260);
+  }
+
+  // A waiting member clicked gives a springy hop.
+  function jiggle(member, now) {
+    jiggles.set(member.id, now);
+  }
+
+  return { resize, draw, onEvent, celebrate, toBoard, poke, jiggle, visible: (ball) => onScreen(camera, ball, width, height) };
 }

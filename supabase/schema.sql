@@ -91,3 +91,8 @@ update public.members set lines_pick = array['제가 가죠', '든든하게 다�
 update public.members set lines_pick = array['야호, 나다!', '빨리 던져 줘요', '준비 완료!'] where id = 'junhyuk' and lines_pick = '{}';
 update public.members set lines_pick = array['저요?', '잘 골라 볼게요', '두근두근…'] where id = 'eunseol' and lines_pick = '{}';
 update public.members set lines_pick = array['드디어!', '매운 데로 갈게요', '가즈아 준비'] where id = 'beomgyu' and lines_pick = '{}';
+
+-- Who took the team to the place: the member whose ball landed there. Older records, and ones
+-- added by hand, leave it empty.
+alter table public.visits add column if not exists member_id text null
+  references public.members (id) on update cascade on delete set null;

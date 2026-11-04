@@ -97,31 +97,49 @@ export function groupByDay(timeline) {
   return days;
 }
 
-export function renderTimeline(days) {
+// Who took the team there, when the record says: their face and name.
+function taker(member, photo) {
+  if (!member) return '';
+  const face = photo ? `<img src="${escapeHtml(photo)}" alt="" onerror="this.remove()">` : '';
+  return `<span class="who" style="--who:${escapeHtml(member.color)}">${face}${escapeHtml(member.name)}</span>`;
+}
+
+// editing: the visit whose place is being changed, shown as a list of places to pick from.
+export function renderTimeline(days, { editing = null, menus = [], members = new Map(), photoOf = () => null } = {}) {
   if (days.length === 0) return EMPTY;
   return days
     .map(
       (day) => `<div class="day"><time datetime="${day.date}">${shortDate(day.date)}</time><ul>${day.visits
-        .map(
-          (v) => `<li class="visit${v.canceled ? ' canceled' : ''}">
+        .map((v) => {
+          const member = members.get(v.memberId);
+          if (v.id === editing) {
+            return `<li class="visit editing">
+              <select data-change="${v.id}" aria-label="간 곳 바꾸기">${renderMenuOptions(menus, v.menuId)}</select>
+              <button data-stop-edit>그대로</button>
+            </li>`;
+          }
+          return `<li class="visit${v.canceled ? ' canceled' : ''}">
+            ${taker(member, member && photoOf(member))}
             <span class="name"><span class="emoji">${v.icon ?? DEFAULT_ICON}</span>${escapeHtml(v.name)}</span>
             ${v.source === 'manual' ? '<small>직접 추가</small>' : ''}
             ${v.canceled ? '<small>취소됨</small>' : ''}
+            ${v.canceled ? '' : `<button data-edit="${v.id}" title="실제로 간 곳으로 바꾸기">바꾸기</button>`}
             <button data-id="${v.id}" data-cancel="${!v.canceled}">${v.canceled ? '되돌리기' : '취소'}</button>
-          </li>`,
-        )
+          </li>`;
+        })
         .join('')}</ul></div>`,
     )
     .join('');
 }
 
-export function renderMenuOptions(menus) {
+// selected: the place already chosen, kept in the list even if it has since been hidden.
+export function renderMenuOptions(menus, selected = '') {
   return (
-    '<option value="">가게 선택</option>' +
+    `<option value=""${selected ? '' : ' selected'}>가게 선택</option>` +
     menus
-      .filter((m) => !m.hidden)
+      .filter((m) => !m.hidden || m.id === selected)
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-      .map((m) => `<option value="${m.id}">${menuIcon(m)} ${escapeHtml(m.name)}</option>`)
+      .map((m) => `<option value="${m.id}"${m.id === selected ? ' selected' : ''}>${menuIcon(m)} ${escapeHtml(m.name)}</option>`)
       .join('')
   );
 }

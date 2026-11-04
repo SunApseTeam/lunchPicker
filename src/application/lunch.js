@@ -10,9 +10,10 @@ import { DEFAULT_TEAM, parseMember } from '../domain/team.js';
 //   listMenus()               -> [{ id, name, hidden, icon, tags, createdAt }]  (icon may be missing)
 //   insertMenus(rows)         rows: [{ name, tags }] -> the inserted menus
 //   updateMenu(id, patch)     patch: { name }, { hidden }, { icon } or { tags }
-//   listVisits()              -> [{ id, menuId, visitedOn, source, canceled, createdAt }]
-//   insertVisits(rows)        rows: [{ menuId, visitedOn, source: 'spin' | 'manual' }]
-//   updateVisit(id, patch)    patch: { canceled }
+//   listVisits()              -> [{ id, menuId, memberId, visitedOn, source, canceled, createdAt }]
+//                             (memberId: who took the team there; null for older and hand-added ones)
+//   insertVisits(rows)        rows: [{ menuId, memberId?, visitedOn, source: 'spin' | 'manual' }]
+//   updateVisit(id, patch)    patch: { canceled } or { menuId }
 //   listMembers()             -> [{ id, name, color, scale, softness, bounce, lines, active }]
 //                             (lines: { pick, wait, drop, bounce, bump, win }, each a list of strings)
 //
@@ -60,14 +61,21 @@ export function createLunchService(store, today) {
       return store.updateMenu(id, { tags: checkTags(tags) });
     },
 
-    // Every winner of a round is recorded: the team splits up and goes to all of them.
-    recordPicks(menuIds) {
-      return store.insertVisits(menuIds.map((menuId) => ({ menuId, visitedOn: today(), source: 'spin' })));
+    // Every winner of a round is recorded, with the member who took the team there: the team
+    // splits up and goes to all of them. picks: [{ menuId, memberId? }].
+    recordPicks(picks) {
+      return store.insertVisits(picks.map(({ menuId, memberId = null }) => ({ menuId, memberId, visitedOn: today(), source: 'spin' })));
     },
 
     addManualVisit(menuId, visitedOn) {
       if (visitedOn > today()) throw new Error('앞으로의 날짜는 기록할 수 없어요');
       return store.insertVisits([{ menuId, visitedOn, source: 'manual' }]);
+    },
+
+    // The place picked is not always the place gone to: a record can be moved to another place.
+    async changeVisitMenu(id, menuId) {
+      if (!(await store.listMenus()).some((m) => m.id === menuId)) throw new Error('없는 가게예요');
+      return store.updateVisit(id, { menuId });
     },
 
     // Visits are never deleted, only marked canceled, so a mistaken cancel can be undone.

@@ -1,6 +1,7 @@
 import { createLunchService } from '../../application/lunch.js';
 import { todayString } from '../../domain/date.js';
 import { createStore, storeMode } from '../../infrastructure/store.js';
+import { teamPhotoUrls } from '../../infrastructure/team-photos.js';
 import { $, markMode, toast } from '../shared/dom.js';
 import {
   EMPTY,
@@ -20,6 +21,11 @@ const mode = storeMode();
 const lunch = createLunchService(createStore(mode), () => todayString());
 markMode(mode);
 let shownDays = PAGE_DAYS;
+// The visit whose place is being changed, if any.
+let editing = null;
+// Who is on the team, to show who took everyone to each place. Not having it only hides that.
+const members = new Map((await lunch.listMembers().catch(() => [])).map((m) => [m.id, m]));
+const photoOf = (m) => teamPhotoUrls(m.id)[0];
 
 const topNote = (r) => (r.top ? `, 제일 많이 간 곳 ${r.top}` : '');
 
@@ -41,7 +47,8 @@ async function render() {
   $('#months').innerHTML = hasVisits ? renderColumns(stats.months, (r) => `${r.label} ${r.count}번${topNote(r)}`) : EMPTY;
   $('#tags').innerHTML = hasVisits ? renderTags(stats.tags, stats.untaggedVisits) : EMPTY;
   const days = groupByDay(stats.timeline);
-  $('#timeline').innerHTML = renderTimeline(days.slice(0, shownDays));
+  $('#timeline').innerHTML = renderTimeline(days.slice(0, shownDays), { editing, menus, members, photoOf });
+  $('#timeline select[data-change]')?.focus();
   $('#more').hidden = days.length <= shownDays;
 
   const select = $('#add-menu');
@@ -63,13 +70,37 @@ async function attempt(action) {
 }
 
 $('#timeline').addEventListener('click', (e) => {
-  const button = e.target instanceof Element && e.target.closest('button[data-id]');
+  const target = e.target instanceof Element ? e.target : null;
+  const edit = target?.closest('button[data-edit]');
+  if (edit || target?.closest('button[data-stop-edit]')) {
+    editing = edit ? edit.dataset.edit : null;
+    render();
+    return;
+  }
+  const button = target?.closest('button[data-id]');
   if (!button) return;
   const cancel = button.dataset.cancel === 'true';
   attempt(async () => {
     await lunch.setVisitCanceled(button.dataset.id, cancel);
     toast(cancel ? '기록을 취소했어요' : '기록을 되돌렸어요');
   });
+});
+
+// Picking another place moves the record there; who took the team there stays.
+$('#timeline').addEventListener('change', (e) => {
+  const select = e.target instanceof Element && e.target.closest('select[data-change]');
+  if (!select?.value) return;
+  const name = select.selectedOptions[0].textContent;
+  editing = null;
+  attempt(async () => {
+    await lunch.changeVisitMenu(select.dataset.change, select.value);
+    toast(`${name}(으)로 바꿨어요`);
+  });
+});
+$('#timeline').addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !editing) return;
+  editing = null;
+  render();
 });
 
 $('#add-form').addEventListener('submit', (e) => {

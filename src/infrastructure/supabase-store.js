@@ -16,6 +16,7 @@ const toMember = (r) => ({
 const toVisit = (r) => ({
   id: r.id,
   menuId: r.menu_id,
+  memberId: r.member_id ?? null,
   visitedOn: r.visited_on,
   source: r.source,
   canceled: r.canceled,
@@ -75,11 +76,14 @@ export function createSupabaseStore(url, key) {
     async insertVisits(rows) {
       await request('visits', {
         method: 'POST',
-        body: rows.map((r) => ({ menu_id: r.menuId, visited_on: r.visitedOn, source: r.source })),
+        body: rows.map((r) => ({ menu_id: r.menuId, member_id: r.memberId ?? null, visited_on: r.visitedOn, source: r.source })),
       });
     },
     async updateVisit(id, patch) {
-      await request(`visits?id=eq.${id}`, { method: 'PATCH', body: patch });
+      const body = {};
+      if ('canceled' in patch) body.canceled = patch.canceled;
+      if ('menuId' in patch) body.menu_id = patch.menuId;
+      await request(`visits?id=eq.${id}`, { method: 'PATCH', body });
     },
     async listMembers() {
       return (await request('members?select=*&order=created_at.asc')).map(toMember);

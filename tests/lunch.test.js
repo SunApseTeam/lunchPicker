@@ -56,11 +56,22 @@ test('menu names are trimmed and unique ignoring case, hidden ones included', as
 test('confirmed picks are recorded for today, one visit per winner', async () => {
   const { lunch, store } = setup();
   const [a, b] = await lunch.listMenus();
-  await lunch.recordPicks([a.id, b.id]);
+  await lunch.recordPicks([{ menuId: a.id, memberId: 'jungwon' }, { menuId: b.id }]);
   assert.deepEqual(
     store.visits.map((v) => [v.menuId, v.visitedOn, v.source]),
     [[a.id, '2026-10-30', 'spin'], [b.id, '2026-10-30', 'spin']],
   );
+});
+
+test('a pick records who took the team there, and a record can be moved to the place really gone to', async () => {
+  const { lunch, store } = setup();
+  const [a, b] = await lunch.listMenus();
+  await lunch.recordPicks([{ menuId: a.id, memberId: 'jungwon' }, { menuId: b.id }]);
+  assert.deepEqual(store.visits.map((v) => v.memberId), ['jungwon', null]);
+  await lunch.changeVisitMenu(store.visits[0].id, b.id);
+  assert.equal(store.visits[0].menuId, b.id);
+  assert.equal(store.visits[0].memberId, 'jungwon', 'who took them there stays');
+  await assert.rejects(lunch.changeVisitMenu(store.visits[0].id, 'nope'), /없는 가게/);
 });
 
 test('manual visits cannot be dated in the future', async () => {
@@ -73,7 +84,7 @@ test('manual visits cannot be dated in the future', async () => {
 test('a canceled visit drops out of the stats and comes back when restored', async () => {
   const { lunch, store } = setup();
   const [a] = await lunch.listMenus();
-  await lunch.recordPicks([a.id]);
+  await lunch.recordPicks([{ menuId: a.id }]);
   const id = store.visits[0].id;
   await lunch.setVisitCanceled(id, true);
   assert.equal((await lunch.loadStats()).stats.totalVisits, 0);

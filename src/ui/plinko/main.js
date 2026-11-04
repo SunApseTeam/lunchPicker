@@ -151,11 +151,11 @@ function backToIdle() {
 
 async function confirmResult() {
   if (phase.name !== 'result' || saving) return;
-  const picked = results().map(({ slot }) => slotMenus[slot]);
+  const picked = results().map(({ slot, member }) => ({ menu: slotMenus[slot], member }));
   saving = true;
   try {
-    await lunch.recordPicks(picked.map((m) => m.id));
-    toast(`${picked.map((m) => m.name).join(', ')} 기록 완료. 맛있게 드세요!`);
+    await lunch.recordPicks(picked.map(({ menu, member }) => ({ menuId: menu.id, memberId: member.id })));
+    toast(`${picked.map(({ menu }) => menu.name).join(', ')} 기록 완료. 맛있게 드세요!`);
     backToIdle();
   } catch (err) {
     toast(err.message, true);
@@ -412,7 +412,9 @@ function toggleMember(member) {
   if (!member || !leaveResult()) return;
   // Picking past the limit swaps out the latest pick. Before two places are chosen there is no
   // limit to go by yet but the usual cap.
-  bench.toggle(member, performance.now() / 1000, candidates().length >= 2 ? maxPick() : MAX_PICK);
+  const now = performance.now() / 1000;
+  bench.toggle(member, now, candidates().length >= 2 ? maxPick() : MAX_PICK);
+  renderer.jiggle(member, now);
   renderControls();
 }
 
@@ -422,7 +424,14 @@ function memberAt(e) {
   const p = renderer.toBoard(e.clientX - rect.left, e.clientY - rect.top);
   return bench.hit(benchSpots(), p.x, p.y);
 }
-canvas.addEventListener('click', (e) => toggleMember(memberAt(e)));
+// Any click on the scene gets a little reaction; a click on a waiting member also picks them.
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const now = performance.now() / 1000;
+  renderer.poke(e.clientX - rect.left, e.clientY - rect.top, now);
+  const member = memberAt(e);
+  toggleMember(member);
+});
 canvas.addEventListener('pointermove', (e) => {
   canvas.style.cursor = memberAt(e) ? 'pointer' : '';
 });

@@ -30,11 +30,15 @@ function sampleRows(today) {
       // out lately so the "not visited lately" card has something to show.
       let menu = menus[Math.floor(rng() ** 1.7 * (menus.length - 1))];
       if (menu.name === '노모어피자' && back < 60) menu = menus[0];
+      const source = rng() < 0.12 ? 'manual' : 'spin';
+      // Records made by a round say which member took the team there.
+      const memberId = source === 'spin' ? DEFAULT_TEAM[Math.floor(rng() * DEFAULT_TEAM.length)].id : null;
       visits.push({
         id: `demo-v${visits.length}`,
         menuId: menu.id,
+        memberId,
         visitedOn: date,
-        source: rng() < 0.12 ? 'manual' : 'spin',
+        source,
         canceled: rng() < 0.04,
         createdAt: `${date}T03:0${k}:00Z`,
       });
@@ -62,7 +66,7 @@ export function createDemoStore() {
       Object.assign(menus.find((m) => m.id === id), patch);
     },
     async listVisits() {
-      return visits.map((v) => ({ ...v }));
+      return visits.map((v) => ({ memberId: null, ...v }));
     },
     async insertVisits(rows) {
       const createdAt = new Date().toISOString();

@@ -104,6 +104,10 @@
     .visit .name { font-weight: 700; }
     .visit small { color: var(--muted); font-size: 12px; }
     .visit.canceled .name { color: var(--muted); text-decoration: line-through; font-weight: 400; }
+    .visit .who { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+    .visit .who img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; border: 2px solid var(--who); }
+    .visit.editing { padding: 4px 6px; }
+    .visit select { font: inherit; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; background: #fff; }
     .visit button {
       background: none; border: 1px solid var(--line); border-radius: 999px; color: var(--muted);
       padding: 1px 10px; font: inherit; font-size: 12px; cursor: pointer;

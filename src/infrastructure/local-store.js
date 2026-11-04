@@ -62,7 +62,8 @@ export function createLocalStore() {
     },
     async listVisits() {
       fresh();
-      return state.visits.map((v) => ({ ...v }));
+      // Visits saved before members were recorded have no memberId.
+      return state.visits.map((v) => ({ memberId: null, ...v }));
     },
     async insertVisits(rows) {
       fresh();
