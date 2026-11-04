@@ -103,10 +103,12 @@ function drop() {
   const members = bench.chosen();
   const players = members.map((m) => ({ physics: memberPhysics(settings, m), x: spots.find((s) => s.member === m).x }));
   setPhase({ name: 'running', round: createRound(board, players, Math.random, slotMenus.map((m) => m.id)), members });
+  for (const m of members) bench.shout(m, 'drop', performance.now() / 1000);
 }
 
 function backToIdle() {
   bench.reshuffle();
+  bench.quiet();
   phase = { name: 'idle', round: null, members: [] };
   rebuildBoard({ reshuffle: true });
   setPhase(phase);
@@ -144,12 +146,19 @@ function retry() {
 function onEngineEvent(event) {
   const now = performance.now() / 1000;
   renderer.onEvent(event, now);
+  // Plain knocks are everywhere; only being flung (a bumper, or bouncing off a ball in a slot)
+  // gets a line.
+  if (event.type === 'hit' && (event.kind === 'bumper' || event.kind === 'slotBounce')) bench.shout(phase.members[event.ball.player], 'bounce', now);
   if (event.type === 'hit') audio.hit(event.kind, event.speed, event.ball.cx, board.width);
   else if (event.type === 'settle') audio.settle(event.ball.cx, board.width);
-  else if (event.type === 'redrop') audio.redrop();
+  else if (event.type === 'redrop') {
+    audio.redrop();
+    bench.shout(phase.members[event.ball.player], 'drop', now);
+  }
   else if (event.type === 'done') {
     audio.win(event.winners.length);
     renderer.celebrate(board, event.winners);
+    for (const m of phase.members) bench.shout(m, 'win', now);
     setPhase({ ...phase, name: 'result' });
   }
 }
@@ -188,7 +197,7 @@ function frame(nowMs) {
     view: { mode: phase.name, slowmo },
     now,
     dt,
-    bench: { spots: benchSpots(), isSelected: bench.isSelected, speech: bench.talk(now, away), away },
+    bench: { spots: benchSpots(), isSelected: bench.isSelected, speech: bench.talk(now, away), away, shoutOf: bench.shoutOf },
     memberOf: (ball) => phase.members[ball.player],
     faces,
   });
@@ -399,6 +408,7 @@ if (new URLSearchParams(location.search).has('debug')) {
     bench: () => benchSpots().map((s) => ({ id: s.member.id, x: s.x, y: s.y, r: s.r, picked: bench.isSelected(s.member) })),
     members: () => phase.members.map((m) => m.id),
     winners: () => phase.round?.winners ?? null,
+    said: () => phase.members.map((m) => bench.shoutOf(m, performance.now() / 1000)?.line ?? null),
   };
 }
 

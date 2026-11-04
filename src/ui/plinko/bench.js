@@ -3,6 +3,10 @@
 // someone stands gives them no edge. One member at a time says a line in a speech bubble.
 const GAP = 18;
 const SAY_EVERY = 2.6;
+// How long a bubble stays up, by situation. A win line stays until the next round.
+const LIFE = { wait: 2.5, drop: 1.4, bounce: 1.1, win: Infinity };
+// Knocks come thick and fast, so a member says a bounce line at most this often.
+const BOUNCE_QUIET = 1.5;
 
 export function createBench(team, rng = Math.random) {
   let order = shuffle(team, rng);
@@ -10,6 +14,9 @@ export function createBench(team, rng = Math.random) {
   let turn = 0;
   let saidAt = -Infinity;
   let speech = null;
+  // Lines said by the members who are falling: member id -> { line, at, life, when }.
+  const shouts = new Map();
+  const pick = (list) => list[Math.floor(rng() * list.length)];
 
   function shuffle(list) {
     const a = [...list];
@@ -47,10 +54,21 @@ export function createBench(team, rng = Math.random) {
     if (waiting.length === 0) return (speech = null);
     turn += 1;
     const member = waiting[turn % waiting.length];
-    const line = member.lines[Math.floor(rng() * member.lines.length)];
     saidAt = now;
-    speech = { member, line, at: now };
+    speech = { member, line: pick(member.lines.wait), at: now, life: LIFE.wait };
     return speech;
+  }
+
+  function shout(member, when, now) {
+    if (!member) return;
+    const last = shouts.get(member.id);
+    if (when === 'bounce' && last && now - last.at < Math.max(BOUNCE_QUIET, last.life)) return;
+    shouts.set(member.id, { line: pick(member.lines[when]), at: now, life: LIFE[when], when });
+  }
+
+  function shoutOf(member, now) {
+    const s = member && shouts.get(member.id);
+    return s && now - s.at < s.life ? s : null;
   }
 
   return {
@@ -58,6 +76,9 @@ export function createBench(team, rng = Math.random) {
     hit,
     toggle,
     talk,
+    shout,
+    shoutOf,
+    quiet: () => shouts.clear(),
     isSelected: (member) => selected.has(member.id),
     chosen: () => order.filter((m) => selected.has(m.id)),
     count: () => selected.size,

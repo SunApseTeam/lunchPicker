@@ -13,7 +13,9 @@ test('every member fits the board the settings size was built for', () => {
     }
   }
   assert.equal(new Set(TEAM.map((m) => m.id)).size, TEAM.length);
-  for (const m of TEAM) assert.ok(m.lines.length > 0, `${m.id} has something to say`);
+  for (const m of TEAM) {
+    for (const when of ['wait', 'drop', 'bounce', 'win']) assert.ok(m.lines[when]?.length > 0, `${m.id} has a ${when} line`);
+  }
 });
 
 test('a mixed team drops from its spots, lands in distinct places and finishes', () => {

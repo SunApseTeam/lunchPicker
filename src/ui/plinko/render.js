@@ -494,7 +494,8 @@ export function createRenderer(canvas) {
 
   function drawBench(bench, now, faces) {
     if (!bench) return;
-    const anyPicked = bench.spots.some((s) => bench.isSelected(s.member));
+    // The picked ones dim the rest only while they wait together; once they drop, the rest cheer.
+    const anyPicked = bench.spots.some((s) => !bench.away.has(s.member.id) && bench.isSelected(s.member));
     for (const spot of bench.spots) {
       if (bench.away.has(spot.member.id)) continue;
       const picked = bench.isSelected(spot.member);
@@ -533,14 +534,14 @@ export function createRenderer(canvas) {
     }
     const said = bench.speech;
     const spot = said && bench.spots.find((s) => s.member === said.member);
-    if (spot && !bench.away.has(spot.member.id)) drawBubble(said.line, spot, now - said.at);
+    if (spot && !bench.away.has(spot.member.id)) drawBubble(said.line, spot, now - said.at, said.life);
   }
 
-  // Pops in over the speaker's head and fades before the next one talks.
-  function drawBubble(text, spot, age) {
+  // Pops in over the speaker's head and fades out at the end of its life.
+  function drawBubble(text, spot, age, life) {
     const pop = Math.min(1, age / 0.18);
     const scale = 0.6 + 0.4 * (1 - (1 - pop) ** 3);
-    const fade = Math.max(0, Math.min(1, (2.5 - age) / 0.3));
+    const fade = Math.max(0, Math.min(1, (life - age) / 0.3));
     if (fade <= 0) return;
     ctx.font = '700 28px "IBM Plex Sans KR", sans-serif';
     const w = ctx.measureText(text).width + 36;
@@ -586,6 +587,11 @@ export function createRenderer(canvas) {
     drawBoard(board, slotMenus, winners, world, now);
     drawBench(bench, now, faces);
     for (const b of balls) drawBall(b, now, memberOf?.(b), faces);
+    // Falling members' lines go over every ball, so no ball hides another one's bubble.
+    for (const b of balls) {
+      const said = bench?.shoutOf(memberOf?.(b), now);
+      if (said) drawBubble(said.line, { x: b.cx, y: b.cy, r: b.R }, now - said.at, said.life);
+    }
     drawParticles(dt);
   }
 
