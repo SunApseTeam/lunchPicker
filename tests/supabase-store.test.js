@@ -55,3 +55,13 @@ test('menus carry their tags both ways', async () => {
   await store().updateMenu('m1', { tags: ['중식', '짬뽕'] });
   assert.deepEqual(calls[1].body, { tags: ['중식', '짬뽕'] });
 });
+
+test('team members come back with their lines grouped by situation', async () => {
+  const row = { id: 'jungwon', name: '고정원', color: '#5ab8ff', scale: 1, softness: 0, bounce: 0, active: true,
+    lines_wait: ['a'], lines_drop: ['b'], lines_bounce: ['c'], lines_bump: ['d'], lines_win: ['e'], created_at: 't' };
+  const calls = fakeFetch(() => Response.json([row]));
+  const [m] = await store().listMembers();
+  assert.match(calls[0].url, /\/rest\/v1\/members\?select=\*/);
+  assert.deepEqual(m.lines, { wait: ['a'], drop: ['b'], bounce: ['c'], bump: ['d'], win: ['e'] });
+  assert.equal(m.active, true);
+});

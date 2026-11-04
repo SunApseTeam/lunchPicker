@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { DEFAULT_SETTINGS } from '../src/domain/settings.js';
 import { DT, boardWidth, createBoard, equalWidths, mulberry32, randomBumpers } from '../src/domain/physics.js';
 import { createRound, stepRound } from '../src/domain/round.js';
-import { TEAM, memberPhysics } from '../src/domain/team.js';
+import { DEFAULT_TEAM as TEAM, SITUATIONS, memberPhysics, parseMember } from '../src/domain/team.js';
+import { createLunchService } from '../src/application/lunch.js';
 
 test('every member fits the board the settings size was built for', () => {
   for (const size of [24, 40, DEFAULT_SETTINGS.size, 56]) {
@@ -14,7 +15,7 @@ test('every member fits the board the settings size was built for', () => {
   }
   assert.equal(new Set(TEAM.map((m) => m.id)).size, TEAM.length);
   for (const m of TEAM) {
-    for (const when of ['wait', 'drop', 'bounce', 'win']) assert.ok(m.lines[when]?.length > 0, `${m.id} has a ${when} line`);
+    for (const when of Object.keys(SITUATIONS)) assert.ok(m.lines[when]?.length > 0, `${m.id} has a ${when} line`);
   }
 });
 
@@ -34,4 +35,22 @@ test('a mixed team drops from its spots, lands in distinct places and finishes',
     assert.equal(r.winners.length, k);
     assert.equal(new Set(r.winners).size, k, `distinct places: ${r.winners}`);
   }
+});
+
+test('a hand-edited member row is kept in range and never left speechless', () => {
+  const m = parseMember({ id: 'x', name: ' 새 팀원 ', color: 'red', scale: 1.4, softness: 300, bounce: 'lots', lines: { wait: ['  ', '안녕'], drop: null } });
+  assert.equal(m.name, '새 팀원');
+  assert.match(m.color, /^#[0-9a-f]{6}$/i);
+  assert.equal(m.scale, 1);
+  assert.equal(m.softness, 100);
+  assert.equal(m.bounce, 0);
+  assert.deepEqual(m.lines.wait, ['안녕']);
+  for (const when of Object.keys(SITUATIONS)) assert.ok(m.lines[when].length > 0, `${when} filled in`);
+});
+
+test('the team comes from the store, skipping inactive rows, and an empty table means the built-in team', async () => {
+  const rows = [{ ...TEAM[0], active: true }, { ...TEAM[1], active: false }];
+  const lunch = (members) => createLunchService({ listMembers: async () => members }, () => '2026-11-04');
+  assert.deepEqual((await lunch(rows).listMembers()).map((m) => m.id), [TEAM[0].id]);
+  assert.equal((await lunch([]).listMembers()).length, TEAM.length);
 });

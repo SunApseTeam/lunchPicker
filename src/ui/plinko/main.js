@@ -4,7 +4,7 @@ import { DT, boardWidth, createBoard, equalWidths, maxSlots, mulberry32, randomB
 import { createRound, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
-import { TEAM, memberPhysics } from '../../domain/team.js';
+import { DEFAULT_TEAM, memberPhysics, parseMember } from '../../domain/team.js';
 import { loadSettings, saveSettings } from '../../infrastructure/settings-storage.js';
 import { createStore, storeMode } from '../../infrastructure/store.js';
 import { teamPhotoUrls } from '../../infrastructure/team-photos.js';
@@ -19,6 +19,8 @@ import { createSettingsDialog } from './settings-dialog.js';
 import { createTagEditor } from './tag-editor.js';
 
 const MAX_PICK = 5;
+// Balls brushing past each other are not worth a line; a real knock is.
+const BUMP_SPEED = 250;
 const SLOWMO_SCALE = 0.4;
 
 const mode = storeMode();
@@ -27,8 +29,19 @@ markMode(mode);
 const audio = createAudio();
 const canvas = $('#board');
 const renderer = createRenderer(canvas);
-const bench = createBench(TEAM);
-const faces = createFaces(TEAM, teamPhotoUrls);
+
+// The team comes from the shared store; if it cannot be reached, the built-in team still plays.
+async function loadTeam() {
+  try {
+    return await lunch.listMembers();
+  } catch (err) {
+    toast(err.message, true);
+    return DEFAULT_TEAM.map(parseMember);
+  }
+}
+const team = await loadTeam();
+const bench = createBench(team);
+const faces = createFaces(team, teamPhotoUrls);
 
 let settings = loadSettings(DEFAULT_SETTINGS);
 audio.setMuted(!settings.sound);
@@ -108,7 +121,7 @@ function drop() {
 
 function backToIdle() {
   bench.reshuffle();
-  bench.quiet();
+  bench.quiet(performance.now() / 1000);
   phase = { name: 'idle', round: null, members: [] };
   rebuildBoard({ reshuffle: true });
   setPhase(phase);
@@ -149,6 +162,11 @@ function onEngineEvent(event) {
   // Plain knocks are everywhere; only being flung (a bumper, or bouncing off a ball in a slot)
   // gets a line.
   if (event.type === 'hit' && (event.kind === 'bumper' || event.kind === 'slotBounce')) bench.shout(phase.members[event.ball.player], 'bounce', now);
+  // Two falling members running into each other both have something to say about it.
+  if (event.type === 'hit' && event.kind === 'ball' && event.speed > BUMP_SPEED) {
+    bench.shout(phase.members[event.ball.player], 'bump', now);
+    bench.shout(phase.members[event.target.player], 'bump', now);
+  }
   if (event.type === 'hit') audio.hit(event.kind, event.speed, event.ball.cx, board.width);
   else if (event.type === 'settle') audio.settle(event.ball.cx, board.width);
   else if (event.type === 'redrop') {
@@ -189,6 +207,7 @@ function frame(nowMs) {
   }
   const now = nowMs / 1000;
   const away = new Set(phase.members.map((m) => m.id));
+  const spots = benchSpots();
   renderer.draw({
     board,
     world: phase.round?.world,
@@ -197,7 +216,7 @@ function frame(nowMs) {
     view: { mode: phase.name, slowmo },
     now,
     dt,
-    bench: { spots: benchSpots(), isSelected: bench.isSelected, speech: bench.talk(now, away), away, shoutOf: bench.shoutOf },
+    bench: { spots, isSelected: bench.isSelected, speeches: bench.chatter(now, spots, away, board.width), away, shoutOf: bench.shoutOf },
     memberOf: (ball) => phase.members[ball.player],
     faces,
   });

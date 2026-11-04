@@ -1,5 +1,6 @@
 import { todayString } from '../domain/date.js';
 import { DEFAULT_MENUS } from '../domain/menu.js';
+import { DEFAULT_TEAM } from '../domain/team.js';
 
 // Store port held in memory and filled with about six months of made-up lunches, for looking
 // at the stats screen before real records pile up. Nothing is saved; a reload starts over.
@@ -46,6 +47,9 @@ export function createDemoStore() {
   const { menus, visits } = sampleRows(new Date());
   let n = 0;
   return {
+    async listMembers() {
+      return DEFAULT_TEAM;
+    },
     async listMenus() {
       return menus.map((m) => ({ ...m }));
     },

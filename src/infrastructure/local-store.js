@@ -1,3 +1,5 @@
+import { DEFAULT_TEAM } from '../domain/team.js';
+
 // Store port on this browser's localStorage, for development and as the fallback when no
 // Supabase project is configured.
 const KEY = 'lunch-plinko:v1';
@@ -39,6 +41,10 @@ export function createLocalStore() {
   };
 
   return {
+    // The team is only kept in the shared store; this browser uses the built-in one.
+    async listMembers() {
+      return DEFAULT_TEAM;
+    },
     async listMenus() {
       fresh();
       // Menus saved before tags existed have none.

@@ -2,6 +2,7 @@ import { checkIcon } from '../domain/icon.js';
 import { DEFAULT_MENUS, normalizeMenuName } from '../domain/menu.js';
 import { computeStats } from '../domain/stats.js';
 import { checkTags } from '../domain/tag.js';
+import { DEFAULT_TEAM, parseMember } from '../domain/team.js';
 
 // Use cases for both pages. The store is a plain row store; every rule lives here or in domain/.
 //
@@ -12,6 +13,8 @@ import { checkTags } from '../domain/tag.js';
 //   listVisits()              -> [{ id, menuId, visitedOn, source, canceled, createdAt }]
 //   insertVisits(rows)        rows: [{ menuId, visitedOn, source: 'spin' | 'manual' }]
 //   updateVisit(id, patch)    patch: { canceled }
+//   listMembers()             -> [{ id, name, color, scale, softness, bounce, lines, active }]
+//                             (lines: { wait, drop, bounce, bump, win }, each a list of strings)
 //
 // today() returns 'YYYY-MM-DD' so tests can pin the date.
 export function createLunchService(store, today) {
@@ -24,8 +27,16 @@ export function createLunchService(store, today) {
     return store.listMenus();
   }
 
+  // The team is edited by hand in the shared table, so every row is checked here. An empty or
+  // missing table falls back to the built-in team rather than an empty drop line.
+  async function listMembers() {
+    const rows = (await store.listMembers()).filter((r) => r.active !== false);
+    return (rows.length > 0 ? rows : DEFAULT_TEAM).map(parseMember);
+  }
+
   return {
     listMenus,
+    listMembers,
 
     async addMenu(name) {
       const [menu] = await store.insertMenus([{ name: normalizeMenuName(name, await store.listMenus()), tags: [] }]);

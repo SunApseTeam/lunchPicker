@@ -1,4 +1,5 @@
 import { menuIcon } from '../../domain/icon.js';
+import { BUBBLE_FONT } from './bench.js';
 import { FRAME, cameraTarget, createCamera, followCamera, onScreen } from './camera.js';
 
 export const SLOT_COLORS = [
@@ -532,9 +533,10 @@ export function createRenderer(canvas) {
       ctx.fillStyle = picked || !anyPicked ? INK : MUTED;
       ctx.fillText(spot.member.name, spot.x, spot.y + spot.r + 8);
     }
-    const said = bench.speech;
-    const spot = said && bench.spots.find((s) => s.member === said.member);
-    if (spot && !bench.away.has(spot.member.id)) drawBubble(said.line, spot, now - said.at, said.life);
+    for (const said of bench.speeches) {
+      const spot = bench.spots.find((s) => s.member === said.member);
+      if (spot) drawBubble(said.line, spot, now - said.at, said.life);
+    }
   }
 
   // Pops in over the speaker's head and fades out at the end of its life.
@@ -543,7 +545,7 @@ export function createRenderer(canvas) {
     const scale = 0.6 + 0.4 * (1 - (1 - pop) ** 3);
     const fade = Math.max(0, Math.min(1, (life - age) / 0.3));
     if (fade <= 0) return;
-    ctx.font = '700 28px "IBM Plex Sans KR", sans-serif';
+    ctx.font = `700 ${BUBBLE_FONT}px "IBM Plex Sans KR", sans-serif`;
     const w = ctx.measureText(text).width + 36;
     const h = 54;
     const tipY = spot.y - spot.r - 10;

@@ -3,6 +3,16 @@
 const PAGE = 1000;
 
 const toMenu = (r) => ({ id: r.id, name: r.name, hidden: r.hidden, icon: r.icon ?? null, tags: r.tags ?? [], createdAt: r.created_at });
+const toMember = (r) => ({
+  id: r.id,
+  name: r.name,
+  color: r.color,
+  scale: r.scale,
+  softness: r.softness,
+  bounce: r.bounce,
+  active: r.active,
+  lines: { wait: r.lines_wait, drop: r.lines_drop, bounce: r.lines_bounce, bump: r.lines_bump, win: r.lines_win },
+});
 const toVisit = (r) => ({
   id: r.id,
   menuId: r.menu_id,
@@ -70,6 +80,9 @@ export function createSupabaseStore(url, key) {
     },
     async updateVisit(id, patch) {
       await request(`visits?id=eq.${id}`, { method: 'PATCH', body: patch });
+    },
+    async listMembers() {
+      return (await request('members?select=*&order=created_at.asc')).map(toMember);
     },
   };
 }
