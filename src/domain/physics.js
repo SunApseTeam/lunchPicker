@@ -20,9 +20,9 @@ const BUMPER_KICK = 2400;
 const PEG_SCATTER = 300;
 const AIR_DRAG = 0.9995;
 const PEG_RESTITUTION = 0.7;
-// The slot floor is springy, and the dividers are about half as high as a ball is tall, so about
-// half the balls bounce out of the slot they land in first (measured over single drops: 50% at
-// the default size, 62% at 48, 41% at 56). Landings slower
+// The slot floor is springy, and the dividers are about half as high as a ball is tall, so more
+// than half the balls bounce out of the slot they land in first (measured over single drops: 59%
+// at the default size, 67% at 48, 55% at 56). Landings slower
 // than FLOOR_MIN_SPEED (a ball already resting and jiggling) get no bounce, so a settled ball
 // stays put.
 const FLOOR_RESTITUTION = 0.6;
@@ -59,6 +59,10 @@ export const GEOMETRY = {
   bumperRadius: 18,
   wallBumpRadius: 45,
   dividerHalfWidth: 4,
+  // Space from the bottom peg row down to the slot floor. A ball bouncing out of its slot needs
+  // headroom under the bottom pegs to carry over into the next one, and a ball coming off the
+  // bottom wall bump would otherwise drop straight into the edge slot.
+  slotRoom: 250,
 };
 const BUMPER_COUNT = 8;
 const PEG_MARGIN = 125;
@@ -167,7 +171,7 @@ export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers 
   slotEdges[slotEdges.length - 1] = width;
   const dividers = slotEdges.slice(1, -1);
   const pegBottom = g.pegTop + (g.pegRows - 1) * g.rowGap;
-  const floorY = pegBottom + 180;
+  const floorY = pegBottom + g.slotRoom;
   // Dividers are lower than a ball is tall, in proportion to it, so balls of every size can
   // bounce over them about as often.
   const dividerTop = floorY - radius * DIVIDER_PER_RADIUS;
