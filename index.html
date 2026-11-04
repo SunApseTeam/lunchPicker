@@ -42,8 +42,13 @@
       padding: 28px 22px;
       border-right: 1px solid var(--line);
       background: var(--surface);
-      overflow-y: auto;
+      overflow: hidden;
     }
+    /* Only the place list scrolls: the title, the search box, the add form and the drop button
+       stay in view however many places there are. */
+    aside > * { flex: none; }
+    aside > .candidates { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .list-scroll { flex: 0 1 auto; min-height: 96px; overflow-y: auto; overscroll-behavior: contain; margin: 0 -8px; padding: 0 8px; scrollbar-width: thin; }
     h1 {
       font: 400 34px/1.15 "Black Han Sans", sans-serif;
       word-break: keep-all;
@@ -109,6 +114,7 @@
     }
     details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
     details ul { margin-top: 6px; }
+    #hidden-wrap { margin: 12px 0 4px; }
     .controls { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
     .stepper { display: flex; align-items: center; justify-content: space-between; }
     .stepper .num { display: flex; align-items: center; gap: 14px; }
@@ -201,7 +207,8 @@
     @media (prefers-reduced-motion: reduce) { .beat { animation: none; } }
     .icon-btn { flex: none; width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; font-size: 19px; line-height: 1; padding: 0; }
     .icon-btn:hover { background: var(--panel); }
-    #icon-picker .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 14px 22px 4px; }
+    #icon-picker .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 4px 22px 4px; max-height: min(56vh, 460px); overflow-y: auto; }
+    #icon-picker .grid h3 { grid-column: 1 / -1; margin: 10px 0 0; font-size: 12px; font-weight: 500; letter-spacing: 1px; color: var(--muted); }
     #icon-picker .grid button { font-size: 24px; padding: 8px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
     #icon-picker .grid button:hover, #icon-picker .grid button.on { border-color: var(--accent); background: #fff1f0; }
     #icon-picker-auto { background: none; border: 1px solid var(--line); color: var(--muted); }
@@ -285,7 +292,8 @@
     @media (max-width: 860px) {
       body { grid-template-columns: 1fr; grid-template-rows: 62vh auto; overflow: auto; }
       main { grid-row: 1; }
-      aside { grid-row: 2; border-right: 0; border-top: 1px solid var(--line); padding: 20px 16px; }
+      aside { grid-row: 2; border-right: 0; border-top: 1px solid var(--line); padding: 20px 16px; overflow: visible; }
+      .list-scroll { overflow: visible; }
       #result-names li { font-size: 32px; }
     }
   </style>
@@ -310,23 +318,25 @@
       <h1><span class="beat">두근두근</span><br>점심메뉴 고르기</h1>
       <p class="sub">말랑한 구슬이 멈추는 곳이 오늘의 점심</p>
     </header>
-    <section>
+    <section class="candidates">
       <h2>오늘 후보 <span><b id="candidate-count">0</b>개</span></h2>
       <label class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input id="menu-search" type="search" autocomplete="off" placeholder="가게·태그 검색 · 초성 ㅇㄷ · 줄임말 노피" aria-label="가게 검색">
       </label>
-      <ul id="menu-list"></ul>
-      <p id="search-empty" class="search-empty" hidden><span></span><button type="button" id="search-add" class="ghost">가게로 추가</button></p>
+      <div class="list-scroll">
+        <ul id="menu-list"></ul>
+        <p id="search-empty" class="search-empty" hidden><span></span><button type="button" id="search-add" class="ghost">가게로 추가</button></p>
+        <details id="hidden-wrap" hidden>
+          <summary>숨긴 가게 <span id="hidden-count">0</span>개</summary>
+          <ul id="hidden-list"></ul>
+        </details>
+      </div>
       <form id="add-form" autocomplete="off">
         <input id="add-input" maxlength="20" placeholder="가게 추가" aria-label="새 가게 이름">
         <button type="submit">추가</button>
       </form>
     </section>
-    <details id="hidden-wrap" hidden>
-      <summary>숨긴 가게 <span id="hidden-count">0</span>개</summary>
-      <ul id="hidden-list"></ul>
-    </details>
     <section class="controls">
       <div class="stepper">
         <h2 style="margin:0">뽑을 개수</h2>

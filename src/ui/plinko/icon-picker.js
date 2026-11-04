@@ -1,4 +1,4 @@
-import { ICON_CHOICES, menuIcon } from '../../domain/icon.js';
+import { ICON_GROUPS, menuIcon } from '../../domain/icon.js';
 import { $, escapeHtml } from '../shared/dom.js';
 
 // Popup grid of emoji for one menu. onPick gets the emoji, or null for "guess from the name".
@@ -10,8 +10,10 @@ export function createIconPicker({ onPick }) {
     menuId = menu.id;
     const current = menuIcon(menu);
     $('#icon-picker-title').textContent = `${menu.name} 아이콘`;
-    $('#icon-picker-grid').innerHTML = ICON_CHOICES.map(
-      (icon) => `<button type="button" data-icon="${escapeHtml(icon)}" class="${icon === current ? 'on' : ''}" aria-label="${escapeHtml(icon)}">${icon}</button>`,
+    $('#icon-picker-grid').innerHTML = ICON_GROUPS.map(
+      ({ label, icons }) =>
+        `<h3>${label}</h3>` +
+        icons.map((icon) => `<button type="button" data-icon="${escapeHtml(icon)}" class="${icon === current ? 'on' : ''}" aria-label="${escapeHtml(icon)}">${icon}</button>`).join(''),
     ).join('');
     dialog.showModal();
   }

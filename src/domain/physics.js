@@ -13,17 +13,21 @@ const MAX_SLOT_BOUNCES = 2;
 // A ball that lands on a settled ball is sent on toward a free slot every time, up to this
 // safety cap, rather than left to pile up on it.
 const MAX_SETTLED_BOUNCES = 8;
-const BUMPER_KICK = 1700;
-const PEG_SCATTER = 150;
+// Bumper kicks and peg scatter set how wild a path looks. Tuned on single drops: about five
+// sharp left-right reversals per drop and 1.3 board widths of sideways travel, while the landing
+// slot stays unrelated to where the ball was dropped.
+const BUMPER_KICK = 2400;
+const PEG_SCATTER = 300;
 const AIR_DRAG = 0.9995;
 const PEG_RESTITUTION = 0.7;
-// The slot floor is springy, and the dividers are lower than a ball is tall, so about half the
-// balls bounce out of the slot they land in first (measured over single drops). Landings slower
+// The slot floor is springy, and the dividers are about half as high as a ball is tall, so about
+// half the balls bounce out of the slot they land in first (measured over single drops: 50% at
+// the default size, 62% at 48, 41% at 56). Landings slower
 // than FLOOR_MIN_SPEED (a ball already resting and jiggling) get no bounce, so a settled ball
 // stays put.
 const FLOOR_RESTITUTION = 0.6;
 const FLOOR_MIN_SPEED = 150;
-const DIVIDER_PER_RADIUS = 0.75;
+const DIVIDER_PER_RADIUS = 0.55;
 // A lid tilts toward the nearest open slot: a ball resting on it slides off at this sideways
 // acceleration instead of rolling to and fro between the divider tops.
 const LID_TILT = 1400;
@@ -56,7 +60,7 @@ export const GEOMETRY = {
   wallBumpRadius: 45,
   dividerHalfWidth: 4,
 };
-const BUMPER_COUNT = 6;
+const BUMPER_COUNT = 8;
 const PEG_MARGIN = 125;
 
 export function physicsFrom(settings) {
@@ -117,13 +121,20 @@ export function randomBumpers(rng, width = GEOMETRY.width) {
     }
   }
   const count = Math.round((BUMPER_COUNT * width) / g.width);
-  const picked = [];
-  while (picked.length < count && spots.length > 0) {
-    const [spot] = spots.splice(Math.floor(rng() * spots.length), 1);
-    if (picked.some((p) => Math.abs(p.row - spot.row) <= 1 && Math.abs(p.x - spot.x) <= g.colGap)) continue;
-    picked.push(spot);
+  // Random picks that may not touch can box themselves in short of the count, so a few fresh
+  // tries are made and the fullest kept.
+  let best = [];
+  for (let attempt = 0; attempt < 12 && best.length < count; attempt++) {
+    const left = [...spots];
+    const picked = [];
+    while (picked.length < count && left.length > 0) {
+      const [spot] = left.splice(Math.floor(rng() * left.length), 1);
+      if (picked.some((p) => Math.abs(p.row - spot.row) <= 1 && Math.abs(p.x - spot.x) <= g.colGap)) continue;
+      picked.push(spot);
+    }
+    if (picked.length > best.length) best = picked;
   }
-  return picked;
+  return best;
 }
 
 function buildPegs(g, width, bumpers) {

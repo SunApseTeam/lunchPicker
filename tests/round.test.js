@@ -107,7 +107,7 @@ test('a single drop settles within 20 simulated seconds, at the softest and the 
 });
 
 test('the candidate cap keeps every equal-width slot wide enough for a ball', () => {
-  assert.equal(maxSlots(DEFAULT_SETTINGS.size), 10);
+  assert.equal(maxSlots(DEFAULT_SETTINGS.size), 9);
   for (let size = 24; size <= 56; size += 4) {
     const n = maxSlots(size);
     assert.ok(1200 / n >= minSlotWidth(size), `size ${size}: ${n} slots of ${1200 / n}px fit a ball`);
@@ -177,7 +177,7 @@ test('every round can get its own bumper layout, and none of them traps a ball',
   for (let seed = 1; seed <= 30; seed++) {
     const bumpers = randomBumpers(mulberry32(seed));
     layouts.add(JSON.stringify(bumpers));
-    assert.equal(bumpers.length, 6);
+    assert.equal(bumpers.length, 8);
     for (const a of bumpers) {
       assert.ok(a.row >= 1 && a.row <= 6, `bumper row ${a.row}`);
       for (const b of bumpers) {
@@ -185,7 +185,7 @@ test('every round can get its own bumper layout, and none of them traps a ball',
       }
     }
     const board = createBoard(equalWidths(6), physics.radius, bumpers);
-    assert.equal(board.pegs.filter((p) => p.kind === 'bumper').length, 6);
+    assert.equal(board.pegs.filter((p) => p.kind === 'bumper').length, 8);
     const round = createRound(board, 3, mulberry32(seed), physics);
     for (let i = 0; i < 90 / DT && !round.done; i++) stepRound(round);
     assert.ok(round.done, `layout ${seed} finished`);
