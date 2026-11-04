@@ -21,11 +21,11 @@ const PEG_SCATTER = 300;
 const AIR_DRAG = 0.9995;
 const PEG_RESTITUTION = 0.7;
 // The slot floor is springy, and the dividers are about half as high as a ball is tall, so more
-// than half the balls bounce out of the slot they land in first (measured over single drops: 55%
-// at the default size 56, 59% at 54, 67% at 48). Landings slower
+// than half the balls bounce out of the slot they land in first (measured over single drops: 62%
+// at the default size 56, 65% at 54, 71% at 48). Landings slower
 // than FLOOR_MIN_SPEED (a ball already resting and jiggling) get no bounce, so a settled ball
 // stays put.
-const FLOOR_RESTITUTION = 0.6;
+const FLOOR_RESTITUTION = 0.7;
 const FLOOR_MIN_SPEED = 150;
 const DIVIDER_PER_RADIUS = 0.55;
 // A lid tilts toward the nearest open slot: a ball resting on it slides off at this sideways
