@@ -12,6 +12,8 @@ const PEG = '#3b3d50';
 const MUTED = '#8a8c9c';
 const ACCENT = '#f96262';
 const PINK = '#ff4d7d';
+// Room under the waiting line for the members' names, above where thick walls begin.
+const NAME_ROOM = 46;
 
 // Measured in simulated rounds: knocks run from about 100 (a graze) to 1000+ (a straight drop
 // onto a peg), and the fastest tenth of falling is above 750.
@@ -126,18 +128,14 @@ export function createRenderer(canvas) {
     ctx.fillStyle = grad;
     if (lo < 0 || hi > board.width) {
       ctx.fillRect(lo, 0, hi - lo, wallTop);
+      // The walls are the same dark as the wall bumps, which now stick out of them.
+      ctx.fillStyle = PEG;
       for (const [x, w] of [[lo, -lo], [board.width, hi - board.width]]) {
         if (w <= 0) continue;
-        ctx.fillStyle = '#e2ded3';
-        ctx.fillRect(x, wallTop, w, board.height - wallTop);
-        ctx.fillStyle = '#d6d1c4';
         ctx.beginPath();
-        ctx.roundRect(x, wallTop, w, 12, 6);
+        ctx.roundRect(x, wallTop, w, board.height - wallTop, [12, 12, 0, 0]);
         ctx.fill();
       }
-      ctx.fillStyle = 'rgba(28, 29, 38, 0.08)';
-      ctx.fillRect(-4, wallTop, 4, board.height - wallTop);
-      ctx.fillRect(board.width, wallTop, 4, board.height - wallTop);
       ctx.fillStyle = grad;
     }
     ctx.fillRect(0, 0, board.width, board.floorY);
@@ -602,7 +600,7 @@ export function createRenderer(canvas) {
     board = current;
     const balls = world?.balls ?? [];
     const span = bench
-      ? { ...bench.bounds, wallTop: board.dropY + Math.max(...bench.spots.map((p) => p.r)) + 2 }
+      ? { ...bench.bounds, wallTop: board.dropY + Math.max(...bench.spots.map((p) => p.r)) + NAME_ROOM }
       : { lo: 0, hi: board.width, wallTop: 0 };
     followCamera(camera, cameraTarget(board, { ...view, span: span.hi - span.lo }, balls, width, height), dt);
     const s = camera.scale;
