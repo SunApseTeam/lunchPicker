@@ -497,6 +497,15 @@ export function createRenderer(canvas) {
     if (!bench) return;
     // The picked ones dim the rest only while they wait together; once they drop, the rest cheer.
     const anyPicked = bench.spots.some((s) => !bench.away.has(s.member.id) && bench.isSelected(s.member));
+    const { lo, hi } = bench.bounds;
+    // Past the board's edges the members stand on a ledge of the frame's colour.
+    if (lo < 0 || hi > board.width) {
+      const widest = Math.max(...bench.spots.map((s) => s.r));
+      ctx.fillStyle = '#e9e6dd';
+      ctx.beginPath();
+      ctx.roundRect(lo, board.dropY + widest - 2, hi - lo, 12, 6);
+      ctx.fill();
+    }
     for (const spot of bench.spots) {
       if (bench.away.has(spot.member.id)) continue;
       const picked = bench.isSelected(spot.member);
@@ -529,18 +538,18 @@ export function createRenderer(canvas) {
       ctx.textBaseline = 'top';
       ctx.lineWidth = 5;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.strokeText(spot.member.name, spot.x, spot.y + spot.r + 8);
+      ctx.strokeText(spot.member.name, spot.x, spot.y + spot.r + 16);
       ctx.fillStyle = picked || !anyPicked ? INK : MUTED;
-      ctx.fillText(spot.member.name, spot.x, spot.y + spot.r + 8);
+      ctx.fillText(spot.member.name, spot.x, spot.y + spot.r + 16);
     }
     for (const said of bench.speeches) {
       const spot = bench.spots.find((s) => s.member === said.member);
-      if (spot) drawBubble(said.line, spot, now - said.at, said.life);
+      if (spot) drawBubble(said.line, spot, now - said.at, said.life, bench.bounds);
     }
   }
 
   // Pops in over the speaker's head and fades out at the end of its life.
-  function drawBubble(text, spot, age, life) {
+  function drawBubble(text, spot, age, life, { lo, hi }) {
     const pop = Math.min(1, age / 0.18);
     const scale = 0.6 + 0.4 * (1 - (1 - pop) ** 3);
     const fade = Math.max(0, Math.min(1, (life - age) / 0.3));
@@ -553,8 +562,8 @@ export function createRenderer(canvas) {
     ctx.globalAlpha = fade;
     ctx.translate(spot.x, tipY);
     ctx.scale(scale, scale);
-    // Keep the bubble on the board: near a wall it slides inward while the tail stays put.
-    const x = Math.min(Math.max(-w / 2, -spot.x + 8), board.width - spot.x - w - 8);
+    // Keep the bubble in view: near an edge it slides inward while the tail stays put.
+    const x = Math.min(Math.max(-w / 2, lo - spot.x + 8), hi - spot.x - w - 8);
     ctx.shadowColor = 'rgba(28, 29, 38, 0.18)';
     ctx.shadowBlur = 12;
     ctx.fillStyle = '#fff';
@@ -578,21 +587,32 @@ export function createRenderer(canvas) {
   }
 
   let board = null;
-  function draw({ board: current, world, slotMenus, winners, view, now, dt, bench, memberOf, faces }) {
+  function draw({ board: current, world, slotMenus, winners, view, now, dt, bench, memberOf, faces, liftOf }) {
     board = current;
     const balls = world?.balls ?? [];
-    followCamera(camera, cameraTarget(board, view, balls, width, height), dt);
+    const span = bench ? bench.bounds.hi - bench.bounds.lo : board.width;
+    followCamera(camera, cameraTarget(board, { ...view, span }, balls, width, height), dt);
     const s = camera.scale;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - camera.x * s), dpr * (height / 2 - camera.y * s));
     drawBoard(board, slotMenus, winners, world, now);
     drawBench(bench, now, faces);
-    for (const b of balls) drawBall(b, now, memberOf?.(b), faces);
+    // A member who jumped in from the ledge is drawn easing over from where they stood.
+    const lifted = (b, fn) => {
+      const lift = liftOf?.(b, now);
+      if (!lift) return fn();
+      ctx.save();
+      ctx.translate(lift.x, lift.y);
+      fn();
+      ctx.restore();
+    };
+    for (const b of balls) lifted(b, () => drawBall(b, now, memberOf?.(b), faces));
     // Falling members' lines go over every ball, so no ball hides another one's bubble.
+    const all = { lo: Math.min(0, bench?.bounds.lo ?? 0), hi: Math.max(board.width, bench?.bounds.hi ?? 0) };
     for (const b of balls) {
       const said = bench?.shoutOf(memberOf?.(b), now);
-      if (said) drawBubble(said.line, { x: b.cx, y: b.cy, r: b.R }, now - said.at, said.life);
+      if (said) lifted(b, () => drawBubble(said.line, { x: b.cx, y: b.cy, r: b.R }, now - said.at, said.life, all));
     }
     drawParticles(dt);
   }

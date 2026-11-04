@@ -108,7 +108,7 @@ test('a single drop settles within 20 simulated seconds, at the softest and the 
 });
 
 test('the candidate cap keeps every equal-width slot wide enough for a ball', () => {
-  assert.equal(maxSlots(DEFAULT_SETTINGS.size), 9);
+  assert.equal(maxSlots(DEFAULT_SETTINGS.size), 8);
   for (let size = 24; size <= 56; size += 4) {
     const n = maxSlots(size);
     assert.ok(1200 / n >= minSlotWidth(size), `size ${size}: ${n} slots of ${1200 / n}px fit a ball`);

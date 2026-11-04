@@ -14,7 +14,10 @@ export function createCamera() {
 export function cameraTarget(board, view, balls, width, height) {
   const fitWidth = width / (board.width + FRAME * 2);
   const fitAll = Math.min(fitWidth, height / (board.height + FRAME * 2));
-  if (view.mode === 'idle' || fitAll >= fitWidth) return { x: board.width / 2, y: board.height / 2, scale: fitAll };
+  // Waiting, the view also takes in the ledge the team stands on when it is wider than the board.
+  const fitLedge = Math.min(fitAll, width / (Math.max(board.width, view.span ?? 0) + FRAME * 2));
+  if (view.mode === 'idle') return { x: board.width / 2, y: board.height / 2, scale: fitLedge };
+  if (fitAll >= fitWidth) return { x: board.width / 2, y: board.height / 2, scale: fitAll };
   const clamp = (scale) => {
     const halfW = width / (2 * scale);
     const halfH = height / (2 * scale);

@@ -3,7 +3,7 @@ import { physicsFrom } from './physics.js';
 // The team members who wait on the drop line and fall as the balls. The team's own list lives
 // in the shared store (the members table); this one seeds it and serves ?demo and ?local.
 // Each member's physics is the shared settings nudged by their own traits:
-// - scale: size as a share of the settings size, 0.85 to 1. Never above 1, because the settings
+// - scale: size as a share of the settings size, 0.9 to 1. Never above 1, because the settings
 //   size sets how many slots fit on the board.
 // - softness, bounce: added to the settings value, then kept within 0 to 100.
 // lines: what they say in a speech bubble, by situation (see SITUATIONS).
@@ -25,7 +25,7 @@ export const DEFAULT_TEAM = [
       win: ['여기 좋다!', '내가 골랐어요', '가시죠!'],
     },
   },
-  { id: 'dongwon', name: '김동원', color: '#ffb347', scale: 0.92, softness: 0, bounce: 20,
+  { id: 'dongwon', name: '김동원', color: '#ffb347', scale: 0.95, softness: 0, bounce: 20,
     lines: {
       wait: ['배고파요…', '고기 먹자!', '나 골라줘!'],
       drop: ['출동!', '고기 어디야!', '비켜요~'],
@@ -43,7 +43,7 @@ export const DEFAULT_TEAM = [
       win: ['든든하네', '좋습니다', '여기로 가죠'],
     },
   },
-  { id: 'junhyuk', name: '손준혁', color: '#ff8ad8', scale: 0.85, softness: 0, bounce: 25,
+  { id: 'junhyuk', name: '손준혁', color: '#ff8ad8', scale: 0.9, softness: 0, bounce: 25,
     lines: {
       wait: ['빨리 가요!', '면 먹고 싶다', '나 던져 줘'],
       drop: ['슝~', '날아간다!', '야호!'],
@@ -52,7 +52,7 @@ export const DEFAULT_TEAM = [
       win: ['면이다!', '됐다!', '빨리 가요!'],
     },
   },
-  { id: 'eunseol', name: '조은설', color: '#c38bff', scale: 0.88, softness: 0, bounce: -10,
+  { id: 'eunseol', name: '조은설', color: '#c38bff', scale: 0.92, softness: 0, bounce: -10,
     lines: {
       wait: ['가볍게 먹을래요', '새로운 데 가 봐요', '디저트도?'],
       drop: ['살살 가요', '어디 가지?', '두근두근'],
@@ -61,7 +61,7 @@ export const DEFAULT_TEAM = [
       win: ['괜찮네요', '좋아요!', '디저트도 먹어요'],
     },
   },
-  { id: 'beomgyu', name: '최범규', color: '#4fd1c5', scale: 0.96, softness: -20, bounce: 10,
+  { id: 'beomgyu', name: '최범규', color: '#4fd1c5', scale: 0.98, softness: -20, bounce: 10,
     lines: {
       wait: ['점심 시간이다!', '매운 거 어때요', '줄 안 서는 데로'],
       drop: ['가즈아!', '갑니다~', '맵게 가자'],
@@ -89,7 +89,7 @@ export function parseMember(raw) {
     id: String(raw.id),
     name: String(raw.name ?? raw.id).trim(),
     color: COLOR.test(raw.color ?? '') ? raw.color : '#ffe066',
-    scale: clamp(raw.scale, 0.85, 1, 1),
+    scale: clamp(raw.scale, 0.9, 1, 1),
     softness: clamp(raw.softness, -100, 100, 0),
     bounce: clamp(raw.bounce, -100, 100, 0),
     lines,

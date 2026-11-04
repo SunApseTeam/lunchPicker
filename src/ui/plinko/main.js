@@ -59,6 +59,17 @@ let board = createBoard(equalWidths(2), settings.size, bumpersFor(2));
 // idle: board ready. running: balls in flight. result: winners shown, waiting for 확정 or 다시.
 // members[i] is the team member who fell as player i of the round.
 let phase = { name: 'idle', round: null, members: [] };
+// A member standing past the board's edge, or behind a neighbour, starts the drop elsewhere;
+// for a moment they are drawn swooping over from where they stood.
+const HOP_TIME = 0.35;
+let hop = null;
+function liftOf(ball, now) {
+  const t = hop && ball.id <= hop.gap.length ? (now - hop.at) / HOP_TIME : 1;
+  if (t >= 1) return null;
+  const k = (1 - t) ** 2;
+  const g = hop.gap[ball.id - 1];
+  return { x: g.x * k, y: g.y * k };
+}
 let timeScale = 1;
 let accumulator = 0;
 let saving = false;
@@ -114,9 +125,14 @@ function drop() {
   accumulator = 0;
   const spots = benchSpots();
   const members = bench.chosen();
-  const players = members.map((m) => ({ physics: memberPhysics(settings, m), x: spots.find((s) => s.member === m).x }));
-  setPhase({ name: 'running', round: createRound(board, players, Math.random, slotMenus.map((m) => m.id)), members });
-  for (const m of members) bench.shout(m, 'drop', performance.now() / 1000);
+  const from = members.map((m) => spots.find((s) => s.member === m));
+  const players = members.map((m, i) => ({ physics: memberPhysics(settings, m), x: from[i].x }));
+  const round = createRound(board, players, Math.random, slotMenus.map((m) => m.id));
+  // Where each one really starts (on the board, clear of the others) versus where they stood.
+  const now = performance.now() / 1000;
+  hop = { at: now, gap: round.world.balls.map((b) => ({ x: from[b.player].x - b.cx, y: from[b.player].y - b.cy })) };
+  setPhase({ name: 'running', round, members });
+  for (const m of members) bench.shout(m, 'drop', now);
 }
 
 function backToIdle() {
@@ -208,6 +224,7 @@ function frame(nowMs) {
   const now = nowMs / 1000;
   const away = new Set(phase.members.map((m) => m.id));
   const spots = benchSpots();
+  const bounds = bench.bounds(spots, board);
   renderer.draw({
     board,
     world: phase.round?.world,
@@ -216,7 +233,8 @@ function frame(nowMs) {
     view: { mode: phase.name, slowmo },
     now,
     dt,
-    bench: { spots, isSelected: bench.isSelected, speeches: bench.chatter(now, spots, away, board.width), away, shoutOf: bench.shoutOf },
+    bench: { spots, bounds, isSelected: bench.isSelected, speeches: bench.chatter(now, spots, away, bounds), away, shoutOf: bench.shoutOf },
+    liftOf,
     memberOf: (ball) => phase.members[ball.player],
     faces,
   });

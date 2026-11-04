@@ -10,7 +10,7 @@ test('every member fits the board the settings size was built for', () => {
   for (const size of [24, 40, DEFAULT_SETTINGS.size, 56]) {
     for (const m of TEAM) {
       const r = memberPhysics({ ...DEFAULT_SETTINGS, size }, m).radius;
-      assert.ok(r <= size && r >= size * 0.85 - 1, `${m.id} at size ${size}: ${r}`);
+      assert.ok(r <= size && r >= size * 0.9 - 1, `${m.id} at size ${size}: ${r}`);
     }
   }
   assert.equal(new Set(TEAM.map((m) => m.id)).size, TEAM.length);

@@ -33,14 +33,19 @@ export function createBench(team, rng = Math.random) {
   // When each waiting member next wants to talk. Staggered from the start.
   const nextAt = new Map(team.map((m) => [m.id, rng() * PAUSE[1]]));
 
-  // Spots spread evenly over the board. On a narrow board the members stand smaller while they
-  // wait; radius(member) is their real size, the one they fall at.
+  // Spots spread evenly over the board, at full size. A board too narrow for everyone gets a
+  // wider ledge, centred on it, so the members stand past its edges rather than shrink.
   function spots(board, radius) {
-    const step = board.width / order.length;
-    return order.map((member, i) => {
-      const r = Math.min(radius(member), step / 2 - GAP / 2);
-      return { member, x: step * (i + 0.5), y: board.dropY, r };
-    });
+    const widest = Math.max(...order.map(radius));
+    const step = Math.max(board.width / order.length, 2 * widest + GAP);
+    const left = board.width / 2 - (step * order.length) / 2;
+    return order.map((member, i) => ({ member, x: left + step * (i + 0.5), y: board.dropY, r: radius(member) }));
+  }
+
+  // The stretch the waiting line and its bubbles may use: the board, or the wider ledge.
+  function bounds(list, board) {
+    const step = list.length > 1 ? list[1].x - list[0].x : board.width;
+    return { lo: Math.min(0, list[0].x - step / 2), hi: Math.max(board.width, list.at(-1).x + step / 2) };
   }
 
   function hit(list, x, y) {
@@ -56,12 +61,12 @@ export function createBench(team, rng = Math.random) {
 
   // Waiting members talk whenever they feel like it, several at once. A line waits a moment if
   // its bubble would cover one already up. Members in `away` (falling now) do not chatter.
-  function chatter(now, list, away, width) {
+  function chatter(now, list, away, { lo, hi }) {
     const up = list.filter((s) => live(said.get(s.member.id), now) && said.get(s.member.id).when === 'wait');
     // Where the bubble ends up: centred over the speaker, slid inward near a wall.
     const span = (s, line) => {
       const w = bubbleWidth(line);
-      const left = Math.min(Math.max(s.x - w / 2, 8), width - 8 - w);
+      const left = Math.min(Math.max(s.x - w / 2, lo + 8), hi - 8 - w);
       return [left, left + w];
     };
     for (const spot of shuffle(list)) {
@@ -103,6 +108,7 @@ export function createBench(team, rng = Math.random) {
 
   return {
     spots,
+    bounds,
     hit,
     toggle,
     chatter,
