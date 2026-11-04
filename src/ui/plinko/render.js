@@ -9,10 +9,21 @@ export const SLOT_COLORS = [
 ];
 const BALL_COLORS = ['#ffe066', '#4fd1c5', '#ff6b6b', '#8c9eff', '#ff8ad8'];
 const INK = '#1c1d26';
-const PEG = '#3b3d50';
 const MUTED = '#8a8c9c';
 const ACCENT = '#f96262';
 const PINK = '#ff4d7d';
+// There is no board panel: the balls fall through the meadow. Pegs are little flowers, bumpers
+// pink blossoms, the side walls hedges, the dividers fence posts and the slots picnic mats, all
+// inked like the meadow but crisper and bigger than anything in it.
+const LEAF = '#8cc46c';
+const LEAF_LIGHT = '#a9d88a';
+const LEAF_DARK = '#679c4b';
+const OUTLINE = 'rgba(80, 110, 58, 0.8)';
+const PETAL_INK = 'rgba(120, 110, 80, 0.6)';
+const WOOD = '#c8955f';
+const WOOD_INK = '#8a5f38';
+// How far the side hedges reach past the board when nothing wider stands above them.
+const HEDGE = 90;
 // Room under the waiting line for the members' names, above where thick walls begin.
 const NAME_ROOM = 46;
 
@@ -104,37 +115,27 @@ export function createRenderer(canvas) {
       const ease = 1 - (1 - shut) ** 3;
       const x0 = board.slotEdges[slot];
       const x1 = board.slotEdges[slot + 1];
-      ctx.fillStyle = `rgba(245, 243, 238, ${0.7 * ease})`;
+      ctx.fillStyle = `rgba(250, 248, 238, ${0.55 * ease})`;
       ctx.fillRect(x0, board.dividerTop, x1 - x0, board.height - board.dividerTop);
       const half = ((x1 - x0) / 2) * ease;
       const mid = (x0 + x1) / 2;
-      ctx.fillStyle = PEG;
+      ctx.fillStyle = WOOD;
+      ctx.strokeStyle = WOOD_INK;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(mid - half, board.lidY - 8, half * 2, 12, 6);
+      ctx.roundRect(mid - half, board.lidY - 8, half * 2, 12, 5);
       ctx.fill();
+      ctx.stroke();
     }
   }
 
-  // span: how wide the frame is drawn. When the waiting line is wider than the board (few slots),
-  // the frame grows to match: the waiting area runs its full width, and below it the frame
-  // closes in on the board as thick solid walls.
+  // span: how far the scene reaches sideways (wider than the board when the waiting line is),
+  // and wallTop: where the hedges start, just under the waiting line's names.
   function drawBoard(board, slotMenus, winners, world, now, span) {
-    const { lo, hi, wallTop } = span;
-    ctx.fillStyle = '#e9e6dd';
-    ctx.beginPath();
-    ctx.roundRect(lo - FRAME / 2, -FRAME / 2, hi - lo + FRAME, board.height + FRAME, 30);
-    ctx.fill();
-    const grad = ctx.createLinearGradient(0, 0, 0, board.floorY);
-    grad.addColorStop(0, '#ffffff');
-    grad.addColorStop(1, '#f5f3ee');
-    ctx.fillStyle = grad;
-    const walled = lo < 0 || hi > board.width;
-    if (walled) ctx.fillRect(lo, 0, hi - lo, wallTop);
-    ctx.fillRect(0, 0, board.width, board.floorY);
-    if (walled) drawWalls(board, span);
+    drawHedges(board, span);
 
     ctx.setLineDash([10, 16]);
-    ctx.strokeStyle = 'rgba(28, 29, 38, 0.15)';
+    ctx.strokeStyle = 'rgba(80, 110, 58, 0.3)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(40, board.dropY);
@@ -142,16 +143,20 @@ export function createRenderer(canvas) {
     ctx.stroke();
     ctx.setLineDash([]);
 
+    // Each slot is a picnic mat in its colour, with the place's name on a little cream sign.
     for (let i = 0; i < slotMenus.length; i++) {
       const x0 = board.slotEdges[i];
       const x1 = board.slotEdges[i + 1];
       const color = SLOT_COLORS[i % SLOT_COLORS.length];
       const won = winners?.includes(i);
-      ctx.fillStyle = hexToRgba(color, won ? 0.5 + 0.2 * Math.sin(now * 8) : 0.14);
-      ctx.fillRect(x0, board.dividerTop, x1 - x0, board.floorY - board.dividerTop);
-      ctx.fillStyle = hexToRgba(color, won ? 0.95 : 0.35);
-      ctx.fillRect(x0, board.floorY, x1 - x0, board.height - board.floorY);
-      const max = x1 - x0 - 16;
+      ctx.fillStyle = hexToRgba(color, won ? 0.6 + 0.2 * Math.sin(now * 8) : 0.32);
+      ctx.strokeStyle = hexToRgba(color, 0.9);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(x0 + 5, board.dividerTop - 6, x1 - x0 - 10, board.height - board.dividerTop + 2, 12);
+      ctx.fill();
+      ctx.stroke();
+      const max = x1 - x0 - 26;
       let size = 26;
       ctx.font = `700 ${size}px "IBM Plex Sans KR", sans-serif`;
       while (ctx.measureText(slotMenus[i].name).width > max && size > 16) {
@@ -159,12 +164,19 @@ export function createRenderer(canvas) {
         ctx.font = `700 ${size}px "IBM Plex Sans KR", sans-serif`;
       }
       const label = fitText(slotMenus[i].name, max);
-      ctx.fillStyle = INK;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
       const cx = (x0 + x1) / 2;
       const mid = (board.floorY + board.height) / 2;
       const tags = slotMenus[i].tags ?? [];
+      ctx.fillStyle = won ? '#fffdf2' : 'rgba(255, 253, 242, 0.92)';
+      ctx.strokeStyle = 'rgba(120, 100, 70, 0.45)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(x0 + 11, board.floorY + 8, x1 - x0 - 22, board.height - board.floorY - 14, 10);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = INK;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       // The placeholder slots shown before enough menus are picked have no id and no icon.
       if (slotMenus[i].id) {
         // Tags take a third line under the name, so the icon and name move up to make room.
@@ -181,90 +193,172 @@ export function createRenderer(canvas) {
         ctx.fillText(label, cx, mid);
       }
     }
-    ctx.fillStyle = PEG;
+    // The floor is a fence rail; the dividers are its posts.
+    ctx.fillStyle = WOOD;
+    ctx.strokeStyle = WOOD_INK;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(-4, board.floorY - 3, board.width + 8, 6, 3);
+    ctx.fill();
+    ctx.stroke();
     for (const x of board.dividers) {
+      const w = board.dividerHalfWidth + 2;
       ctx.beginPath();
-      ctx.roundRect(x - board.dividerHalfWidth, board.dividerTop - board.dividerHalfWidth, board.dividerHalfWidth * 2, board.floorY - board.dividerTop + board.dividerHalfWidth, board.dividerHalfWidth);
+      ctx.roundRect(x - w, board.dividerTop - w, w * 2, board.floorY - board.dividerTop + w + 3, [w, w, 2, 2]);
       ctx.fill();
+      ctx.stroke();
     }
-    ctx.fillRect(0, board.floorY - 2, board.width, 4);
     drawLids(world, now);
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, board.width, board.height);
-    ctx.clip();
     for (const peg of board.pegs) {
       const glow = Math.max(0, 1 - (now - (flash.get(peg) ?? -10)) / 0.35);
-      if (peg.kind === 'bumper') {
-        drawBumper(peg, now - (flash.get(peg) ?? -10), now, glow);
-        continue;
-      }
-      if (glow > 0) {
-        ctx.fillStyle = hexToRgba(ACCENT, 0.45 * glow);
-        ctx.beginPath();
-        ctx.arc(peg.x, peg.y, peg.r + 14 * glow, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.fillStyle = glow > 0.5 ? ACCENT : PEG;
+      if (peg.kind === 'bumper') drawBumper(peg, now - (flash.get(peg) ?? -10), now, glow);
+      else if (peg.kind === 'wall') drawBushPuff(peg, board, glow);
+      else drawFlowerPeg(peg, glow);
+    }
+  }
+
+  // A peg is a little white flower with a dark-inked rim; a knock blushes it pink for a moment.
+  function drawFlowerPeg(peg, glow) {
+    const { x, y, r } = peg;
+    if (glow > 0) {
+      ctx.fillStyle = hexToRgba(PINK, 0.3 * glow);
       ctx.beginPath();
-      ctx.arc(peg.x, peg.y, peg.r, 0, Math.PI * 2);
+      ctx.arc(x, y, r * 1.5 + 12 * glow, 0, Math.PI * 2);
       ctx.fill();
     }
+    const turn = x * 0.37 + y * 0.11;
+    ctx.fillStyle = 'rgba(60, 90, 40, 0.18)';
+    ctx.beginPath();
+    ctx.ellipse(x + 2, y + 4, r * 1.3, r * 1.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = PETAL_INK;
+    ctx.fillStyle = glow > 0.3 ? '#ffc4d4' : '#ffffff';
+    for (let i = 0; i < 5; i++) {
+      const a = turn + (i / 5) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(a) * r * 0.75, y + Math.sin(a) * r * 0.75, r * 0.64, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ffd75e';
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.46, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  function tinyFlower(x, y, p, color) {
+    ctx.fillStyle = color;
+    ctx.strokeStyle = PETAL_INK;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(a) * p * 0.8, y + Math.sin(a) * p * 0.8, p * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ffd75e';
+    ctx.beginPath();
+    ctx.arc(x, y, p * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Leafy puffs filling a shape already set as the clip, laid in staggered rows from `inner`.
+  function leaves(inner, side, top, bottom, far) {
+    const step = 34;
+    let row = 0;
+    for (let yy = top + 12; yy < bottom + step; yy += step * 0.8, row++) {
+      for (let xx = inner + side * (row % 2 ? step * 0.5 : 0); side < 0 ? xx > far - step : xx < far + step; xx += side * step) {
+        ctx.fillStyle = (row + Math.round(xx / step)) % 3 === 0 ? LEAF_LIGHT : LEAF;
+        ctx.beginPath();
+        ctx.arc(xx, yy, step * 0.58, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(80, 110, 58, 0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(xx, yy, step * 0.58, Math.PI * 1.1, Math.PI * 1.9);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Hedges line both sides of the board, from just under the waiting line's names down past the
+  // slots. They are as thick as the waiting line reaches past the board, or HEDGE at least.
+  function drawHedges(board, { lo, hi, wallTop }) {
+    const bottom = board.height + FRAME;
+    for (const side of [-1, 1]) {
+      const inner = side < 0 ? 0 : board.width;
+      const far = side < 0 ? Math.min(lo, -HEDGE) : Math.max(hi, board.width + HEDGE);
+      const x = Math.min(inner, far);
+      const w = Math.abs(far - inner);
+      const shoulder = Math.min(40, w / 2);
+      const radii = side < 0 ? [18, shoulder, 0, 0] : [shoulder, 18, 0, 0];
+      ctx.save();
+      ctx.shadowColor = 'rgba(40, 70, 28, 0.35)';
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetY = 6;
+      ctx.fillStyle = LEAF_DARK;
+      ctx.beginPath();
+      ctx.roundRect(x, wallTop, w, bottom - wallTop, radii);
+      ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x, wallTop, w, bottom - wallTop, radii);
+      ctx.clip();
+      leaves(inner, side, wallTop, bottom, far);
+      let n = 0;
+      for (let yy = wallTop + 50; yy < bottom - 20; yy += 70) {
+        tinyFlower(inner + side * (16 + ((n * 37) % Math.max(1, w - 30))), yy, 4.5, ['#ffffff', '#f7c6d9', '#cdb8f0'][n % 3]);
+        n++;
+      }
+      ctx.restore();
+      ctx.strokeStyle = OUTLINE;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(x, wallTop, w, bottom - wallTop, radii);
+      ctx.stroke();
+    }
+  }
+
+  // A wall bump is a round bush pushing out of the hedge into the board.
+  function drawBushPuff(peg, board, glow) {
+    const { x, y, r } = peg;
+    const side = x <= 0 ? -1 : 1;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(side < 0 ? -1 : board.width - r - 2, y - r - 4, r + 3, r * 2 + 8);
+    ctx.clip();
+    ctx.fillStyle = LEAF_DARK;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = LEAF;
+    ctx.beginPath();
+    ctx.arc(x, y, r - 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = hexToRgba('#c6eba8', 0.65 + 0.35 * glow);
+    ctx.beginPath();
+    ctx.ellipse(x - side * r * 0.35, y - r * 0.32, r * 0.32, r * 0.2, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, r, side < 0 ? -Math.PI / 2 : Math.PI / 2, side < 0 ? Math.PI / 2 : Math.PI * 1.5);
+    ctx.stroke();
+    tinyFlower(x - side * r * 0.5, y + r * 0.25, 4, '#ffffff');
     ctx.restore();
   }
 
-  // Thick walls around a narrow board, in the wall bumps' ink: lit a little from above, deeper
-  // toward the floor and toward the board, with a rounded shoulder on the board side, a faint dot
-  // grid like the pegs, and a soft shadow falling onto the board.
-  function drawWalls(board, { lo, hi, wallTop }) {
-    const h = board.height - wallTop;
-    for (const side of [-1, 1]) {
-      const x = side < 0 ? lo : board.width;
-      const w = side < 0 ? -lo : hi - board.width;
-      if (w <= 0) continue;
-      const inner = side < 0 ? 0 : board.width;
-      const shoulder = Math.min(40, w / 2);
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(x, wallTop, w, h, side < 0 ? [14, shoulder, 0, 0] : [shoulder, 14, 0, 0]);
-      ctx.clip();
-      const body = ctx.createLinearGradient(0, wallTop, 0, board.height);
-      body.addColorStop(0, '#50536c');
-      body.addColorStop(0.3, '#3b3d50');
-      body.addColorStop(1, '#2a2c3a');
-      ctx.fillStyle = body;
-      ctx.fillRect(x, wallTop, w, h);
-      const depth = ctx.createLinearGradient(inner, 0, inner + side * 36, 0);
-      depth.addColorStop(0, 'rgba(10, 11, 18, 0.35)');
-      depth.addColorStop(1, 'rgba(10, 11, 18, 0)');
-      ctx.fillStyle = depth;
-      ctx.fillRect(x, wallTop, w, h);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-      const step = 30;
-      for (let yy = wallTop + step; yy < board.height; yy += step) {
-        for (let xx = inner + side * (step / 2); side < 0 ? xx > lo : xx < hi; xx += side * step) {
-          ctx.beginPath();
-          ctx.arc(xx, yy, 2.4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
-      ctx.fillRect(x, wallTop, w, 2.5);
-      ctx.restore();
-      const shade = ctx.createLinearGradient(inner, 0, inner - side * 22, 0);
-      shade.addColorStop(0, 'rgba(28, 29, 38, 0.14)');
-      shade.addColorStop(1, 'rgba(28, 29, 38, 0)');
-      ctx.fillStyle = shade;
-      ctx.fillRect(side < 0 ? inner : inner - 22, wallTop + shoulder / 2, 22, board.floorY - wallTop - shoulder / 2);
-    }
-  }
-
-  // A hit bumper springs: it pops big, then wobbles back while a ring rolls outward.
-  // At rest it breathes a little so it reads as something different from a peg.
+  // A bumper is a pink blossom. A hit springs it: it pops big, then wobbles back while a ring
+  // rolls outward. At rest it breathes and turns a little so it reads as something to aim for.
   function drawBumper(peg, since, now, glow) {
     const spring = since < 1 ? 0.7 * Math.exp(-5 * since) * Math.cos(24 * since) : 0;
     const scale = 1 + spring + 0.06 * Math.sin(now * 3 + peg.x);
+    const r = peg.r * scale;
     if (since < 0.45) {
       const t = since / 0.45;
       ctx.strokeStyle = hexToRgba(PINK, 0.6 * (1 - t));
@@ -273,18 +367,35 @@ export function createRenderer(canvas) {
       ctx.arc(peg.x, peg.y, peg.r * (1.6 + 3.4 * t), 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.fillStyle = hexToRgba(PINK, 0.2 + 0.4 * glow);
+    ctx.fillStyle = hexToRgba(PINK, 0.12 + 0.3 * glow);
     ctx.beginPath();
-    ctx.arc(peg.x, peg.y, peg.r * 1.9 * scale, 0, Math.PI * 2);
+    ctx.arc(peg.x, peg.y, r * 1.9, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = PINK;
+    ctx.fillStyle = 'rgba(60, 90, 40, 0.18)';
     ctx.beginPath();
-    ctx.arc(peg.x, peg.y, peg.r * scale, 0, Math.PI * 2);
+    ctx.ellipse(peg.x + 3, peg.y + 6, r * 1.4, r * 1.2, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    const turn = now * 0.4 + peg.x;
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = 'rgba(200, 70, 115, 0.75)';
+    ctx.fillStyle = '#ff9bbb';
+    for (let i = 0; i < 8; i++) {
+      const a = turn + (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.ellipse(peg.x + Math.cos(a) * r * 0.85, peg.y + Math.sin(a) * r * 0.85, r * 0.55, r * 0.36, a, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ffd0de';
     ctx.beginPath();
-    ctx.arc(peg.x - peg.r * 0.3 * scale, peg.y - peg.r * 0.35 * scale, peg.r * 0.28 * scale, 0, Math.PI * 2);
+    ctx.arc(peg.x, peg.y, r * 0.62, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = '#ffd75e';
+    ctx.strokeStyle = PETAL_INK;
+    ctx.beginPath();
+    ctx.arc(peg.x, peg.y, r * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
   }
 
   function blobPath(pts) {
@@ -645,7 +756,7 @@ export function createRenderer(canvas) {
     const s = camera.scale;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    meadow.draw(ctx, width, height, now, dpr);
+    meadow.draw(ctx, { width, height, dpr, now, cam: camera, board });
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - camera.x * s), dpr * (height / 2 - camera.y * s));
     drawBoard(board, slotMenus, winners, world, now, span);
     drawBench(bench, now, faces);

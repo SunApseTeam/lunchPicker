@@ -1,10 +1,13 @@
-// A soft hand-drawn meadow behind the board: pastel grass with little tufts, flowers and bushes,
-// drifting slowly on a seamless tile, and a butterfly or two fluttering across. It is drawn in
-// screen space, so it stays put while the camera zooms and follows the balls.
+// The ground the balls fall over: a soft hand-drawn meadow of grass, tufts and tiny flowers on a
+// seamless tile. It is fixed to the board, so the flower pegs never seem to slide over it; what
+// moves is the weather: cloud shadows drifting across, petals blowing by and two butterflies.
+// Background flowers stay tiny and faint so they never pass for the pegs, and there are no bushes,
+// which would pass for walls.
 const TILE = 760;
-const DRIFT = { x: 9, y: 6 };
+// Tile pixels per board unit, so the grass stays sharp when the camera zooms in.
+const SHARP = 2;
 const GRASS = '#d5ebb5';
-const INK = 'rgba(96, 128, 72, 0.55)';
+const INK = 'rgba(96, 128, 72, 0.45)';
 
 function rand(seed) {
   let a = seed >>> 0;
@@ -39,61 +42,35 @@ function tuft(ctx, x, y, s) {
   }
 }
 
-function flower(ctx, x, y, petal, color) {
-  ctx.lineWidth = 1.1;
-  ctx.strokeStyle = 'rgba(110, 120, 90, 0.55)';
+function speck(ctx, x, y, petal, color) {
+  ctx.globalAlpha = 0.7;
   ctx.fillStyle = color;
   for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+    const a = (i / 5) * Math.PI * 2;
     ctx.beginPath();
-    ctx.arc(x + Math.cos(a) * petal, y + Math.sin(a) * petal, petal * 0.85, 0, Math.PI * 2);
+    ctx.arc(x + Math.cos(a) * petal, y + Math.sin(a) * petal, petal * 0.8, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
   }
-  ctx.fillStyle = '#ffd75e';
+  ctx.fillStyle = '#ffe28a';
   ctx.beginPath();
-  ctx.arc(x, y, petal * 0.6, 0, Math.PI * 2);
+  ctx.arc(x, y, petal * 0.55, 0, Math.PI * 2);
   ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
-// A round bush: overlapping puffs with a scalloped darker rim and a few flowers on top.
-function bush(ctx, x, y, r, rnd) {
-  const puffs = Array.from({ length: 9 }, (_, i) => {
-    const a = (i / 9) * Math.PI * 2;
-    return { x: x + Math.cos(a) * r * 0.62, y: y + Math.sin(a) * r * 0.5, r: r * (0.42 + rnd() * 0.12) };
-  });
-  ctx.fillStyle = '#86b866';
-  for (const p of puffs) {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r + 2.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#a8d488';
-  for (const p of puffs) {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.beginPath();
-  ctx.ellipse(x, y, r * 0.7, r * 0.55, 0, 0, Math.PI * 2);
-  ctx.fill();
-  for (let i = 0; i < 3; i++) flower(ctx, x + (rnd() - 0.5) * r, y + (rnd() - 0.5) * r * 0.7, 3.2, ['#f7c6d9', '#cdb8f0', '#ffffff'][i]);
-}
-
-function buildTile(scale) {
+function buildTile() {
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(TILE * scale);
-  canvas.height = Math.round(TILE * scale);
+  canvas.width = TILE * SHARP;
+  canvas.height = TILE * SHARP;
   const ctx = canvas.getContext('2d');
-  ctx.scale(scale, scale);
+  ctx.scale(SHARP, SHARP);
   const rnd = rand(7);
   ctx.fillStyle = GRASS;
   ctx.fillRect(0, 0, TILE, TILE);
-  // Lighter patches of sunlight.
   for (let i = 0; i < 12; i++) {
     const x = rnd() * TILE;
     const y = rnd() * TILE;
-    const r = 60 + rnd() * 70;
+    const r = 60 + rnd() * 90;
     wrapped(x, y, r, (px, py) => {
       const g = ctx.createRadialGradient(px, py, 0, px, py, r);
       g.addColorStop(0, 'rgba(240, 250, 220, 0.55)');
@@ -102,28 +79,27 @@ function buildTile(scale) {
       ctx.fillRect(px - r, py - r, r * 2, r * 2);
     });
   }
-  const bushes = [{ x: 610, y: 90, r: 50 }, { x: 130, y: 300, r: 40 }, { x: 470, y: 600, r: 34 }];
-  for (const b of bushes) wrapped(b.x, b.y, b.r * 1.3, (px, py) => bush(ctx, px, py, b.r, rand(b.x)));
-  const clear = (x, y) => bushes.every((b) => Math.hypot(b.x - x, b.y - y) > b.r * 1.4);
   for (let i = 0; i < 150; i++) {
     const x = rnd() * TILE;
     const y = rnd() * TILE;
     const s = 0.8 + rnd() * 0.6;
-    if (clear(x, y)) wrapped(x, y, 12, (px, py) => tuft(ctx, px, py, s));
+    wrapped(x, y, 12, (px, py) => tuft(ctx, px, py, s));
   }
-  const colors = ['#ffffff', '#f7c6d9', '#cdb8f0', '#ffffff', '#ffd1a8'];
-  for (let i = 0; i < 34; i++) {
+  const colors = ['#ffffff', '#f7c6d9', '#cdb8f0', '#ffd1a8'];
+  for (let i = 0; i < 26; i++) {
     const x = rnd() * TILE;
     const y = rnd() * TILE;
-    if (clear(x, y)) wrapped(x, y, 12, (px, py) => flower(ctx, px, py, 3.4 + rnd() * 1.2, colors[i % colors.length]));
+    const p = 1.8 + rnd() * 0.8;
+    wrapped(x, y, 8, (px, py) => speck(ctx, px, py, p, colors[i % colors.length]));
   }
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
   for (let i = 0; i < 80; i++) {
     const x = rnd() * TILE;
     const y = rnd() * TILE;
+    const r = 1.2 + rnd() * 1.1;
     wrapped(x, y, 3, (px, py) => {
       ctx.beginPath();
-      ctx.arc(px, py, 1.4 + rnd() * 1.2, 0, Math.PI * 2);
+      ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.fill();
     });
   }
@@ -153,37 +129,63 @@ function butterfly(ctx, x, y, flap, tint) {
 }
 
 export function createMeadow() {
-  let tile = null;
   let pattern = null;
-  let builtFor = 0;
   const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  const rnd = rand(11);
+  const clouds = [0, 1, 2].map((i) => ({ y: 0.15 + i * 0.33, speed: 16 + i * 5, phase: i * 0.37, rx: 300 + i * 40, ry: 170 }));
+  const petals = Array.from({ length: 16 }, () => ({ x: rnd(), y: rnd(), speed: 18 + rnd() * 22, spin: rnd() * 6, size: 3 + rnd() * 2.5, pink: rnd() < 0.6 }));
   const flyers = [
     { speed: 34, y: 0.22, sway: 26, tint: '#fff1a6', phase: 0 },
     { speed: 26, y: 0.7, sway: 34, tint: '#fbd3e6', phase: 3.1 },
   ];
 
-  // width, height: the canvas in CSS pixels; dpr: device pixels per CSS pixel.
-  function draw(ctx, width, height, now, dpr) {
-    if (!tile || builtFor !== dpr) {
-      tile = buildTile(dpr);
-      pattern = ctx.createPattern(tile, 'repeat');
-      builtFor = dpr;
-    }
-    const t = still ? 0 : now;
-    const ox = ((t * DRIFT.x) % TILE) * dpr;
-    const oy = ((t * DRIFT.y) % TILE) * dpr;
+  // cam: the board point at the screen centre and its zoom. width, height: canvas CSS pixels.
+  function draw(ctx, { width, height, dpr, now, cam, board }) {
+    if (!pattern) pattern = ctx.createPattern(buildTile(), 'repeat');
+    const k = cam.scale * dpr;
+    pattern.setTransform(new DOMMatrix().translate(dpr * (width / 2 - cam.x * cam.scale), dpr * (height / 2 - cam.y * cam.scale)).scale(k / SHARP));
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.translate(-ox, -oy);
     ctx.fillStyle = pattern;
-    ctx.fillRect(ox, oy, width * dpr, height * dpr);
+    ctx.fillRect(0, 0, width * dpr, height * dpr);
+    ctx.restore();
+    const t = still ? 0 : now;
+
+    // Cloud shadows drift across the board's patch of meadow.
+    ctx.save();
+    ctx.setTransform(k, 0, 0, k, dpr * (width / 2 - cam.x * cam.scale), dpr * (height / 2 - cam.y * cam.scale));
+    const span = board.width + 1600;
+    for (const c of clouds) {
+      const x = ((t * c.speed + c.phase * span) % span) - 800;
+      const y = board.height * c.y;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, c.rx);
+      g.addColorStop(0, 'rgba(60, 96, 44, 0.10)');
+      g.addColorStop(1, 'rgba(60, 96, 44, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(x, y, c.rx, c.ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
     if (still) return;
+
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (const p of petals) {
+      const x = (p.x * (width + 60) + t * p.speed) % (width + 60) - 30;
+      const y = (p.y * (height + 60) + t * p.speed * 0.6) % (height + 60) - 30;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(t * 1.3 + p.spin);
+      ctx.fillStyle = p.pink ? 'rgba(255, 196, 214, 0.85)' : 'rgba(255, 255, 255, 0.9)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.size, p.size * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     for (const f of flyers) {
-      const span = width + 80;
-      const x = ((t * f.speed + f.phase * 200) % span) - 40;
+      const across = width + 80;
+      const x = ((t * f.speed + f.phase * 200) % across) - 40;
       const y = height * f.y + Math.sin(t * 0.9 + f.phase) * f.sway;
       butterfly(ctx, x, y, t * 11 + f.phase, f.tint);
     }
