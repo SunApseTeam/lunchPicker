@@ -111,15 +111,35 @@ export function createRenderer(canvas) {
     }
   }
 
-  function drawBoard(board, slotMenus, winners, world, now) {
+  // span: how wide the frame is drawn. When the waiting line is wider than the board (few slots),
+  // the frame grows to match: the waiting area runs its full width, and below it the frame
+  // closes in on the board as thick solid walls.
+  function drawBoard(board, slotMenus, winners, world, now, span) {
+    const { lo, hi, wallTop } = span;
     ctx.fillStyle = '#e9e6dd';
     ctx.beginPath();
-    ctx.roundRect(-FRAME / 2, -FRAME / 2, board.width + FRAME, board.height + FRAME, 30);
+    ctx.roundRect(lo - FRAME / 2, -FRAME / 2, hi - lo + FRAME, board.height + FRAME, 30);
     ctx.fill();
     const grad = ctx.createLinearGradient(0, 0, 0, board.floorY);
     grad.addColorStop(0, '#ffffff');
     grad.addColorStop(1, '#f5f3ee');
     ctx.fillStyle = grad;
+    if (lo < 0 || hi > board.width) {
+      ctx.fillRect(lo, 0, hi - lo, wallTop);
+      for (const [x, w] of [[lo, -lo], [board.width, hi - board.width]]) {
+        if (w <= 0) continue;
+        ctx.fillStyle = '#e2ded3';
+        ctx.fillRect(x, wallTop, w, board.height - wallTop);
+        ctx.fillStyle = '#d6d1c4';
+        ctx.beginPath();
+        ctx.roundRect(x, wallTop, w, 12, 6);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(28, 29, 38, 0.08)';
+      ctx.fillRect(-4, wallTop, 4, board.height - wallTop);
+      ctx.fillRect(board.width, wallTop, 4, board.height - wallTop);
+      ctx.fillStyle = grad;
+    }
     ctx.fillRect(0, 0, board.width, board.floorY);
 
     ctx.setLineDash([10, 16]);
@@ -497,15 +517,6 @@ export function createRenderer(canvas) {
     if (!bench) return;
     // The picked ones dim the rest only while they wait together; once they drop, the rest cheer.
     const anyPicked = bench.spots.some((s) => !bench.away.has(s.member.id) && bench.isSelected(s.member));
-    const { lo, hi } = bench.bounds;
-    // Past the board's edges the members stand on a ledge of the frame's colour.
-    if (lo < 0 || hi > board.width) {
-      const widest = Math.max(...bench.spots.map((s) => s.r));
-      ctx.fillStyle = '#e9e6dd';
-      ctx.beginPath();
-      ctx.roundRect(lo, board.dropY + widest - 2, hi - lo, 12, 6);
-      ctx.fill();
-    }
     for (const spot of bench.spots) {
       if (bench.away.has(spot.member.id)) continue;
       const picked = bench.isSelected(spot.member);
@@ -590,13 +601,15 @@ export function createRenderer(canvas) {
   function draw({ board: current, world, slotMenus, winners, view, now, dt, bench, memberOf, faces, liftOf }) {
     board = current;
     const balls = world?.balls ?? [];
-    const span = bench ? bench.bounds.hi - bench.bounds.lo : board.width;
-    followCamera(camera, cameraTarget(board, { ...view, span }, balls, width, height), dt);
+    const span = bench
+      ? { ...bench.bounds, wallTop: board.dropY + Math.max(...bench.spots.map((p) => p.r)) + 2 }
+      : { lo: 0, hi: board.width, wallTop: 0 };
+    followCamera(camera, cameraTarget(board, { ...view, span: span.hi - span.lo }, balls, width, height), dt);
     const s = camera.scale;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - camera.x * s), dpr * (height / 2 - camera.y * s));
-    drawBoard(board, slotMenus, winners, world, now);
+    drawBoard(board, slotMenus, winners, world, now, span);
     drawBench(bench, now, faces);
     // A member who jumped in from the ledge is drawn easing over from where they stood.
     const lifted = (b, fn) => {
