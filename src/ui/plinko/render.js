@@ -126,19 +126,10 @@ export function createRenderer(canvas) {
     grad.addColorStop(0, '#ffffff');
     grad.addColorStop(1, '#f5f3ee');
     ctx.fillStyle = grad;
-    if (lo < 0 || hi > board.width) {
-      ctx.fillRect(lo, 0, hi - lo, wallTop);
-      // The walls are the same dark as the wall bumps, which now stick out of them.
-      ctx.fillStyle = PEG;
-      for (const [x, w] of [[lo, -lo], [board.width, hi - board.width]]) {
-        if (w <= 0) continue;
-        ctx.beginPath();
-        ctx.roundRect(x, wallTop, w, board.height - wallTop, [12, 12, 0, 0]);
-        ctx.fill();
-      }
-      ctx.fillStyle = grad;
-    }
+    const walled = lo < 0 || hi > board.width;
+    if (walled) ctx.fillRect(lo, 0, hi - lo, wallTop);
     ctx.fillRect(0, 0, board.width, board.floorY);
+    if (walled) drawWalls(board, span);
 
     ctx.setLineDash([10, 16]);
     ctx.strokeStyle = 'rgba(28, 29, 38, 0.15)';
@@ -219,6 +210,52 @@ export function createRenderer(canvas) {
       ctx.fill();
     }
     ctx.restore();
+  }
+
+  // Thick walls around a narrow board, in the wall bumps' ink: lit a little from above, deeper
+  // toward the floor and toward the board, with a rounded shoulder on the board side, a faint dot
+  // grid like the pegs, and a soft shadow falling onto the board.
+  function drawWalls(board, { lo, hi, wallTop }) {
+    const h = board.height - wallTop;
+    for (const side of [-1, 1]) {
+      const x = side < 0 ? lo : board.width;
+      const w = side < 0 ? -lo : hi - board.width;
+      if (w <= 0) continue;
+      const inner = side < 0 ? 0 : board.width;
+      const shoulder = Math.min(40, w / 2);
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x, wallTop, w, h, side < 0 ? [14, shoulder, 0, 0] : [shoulder, 14, 0, 0]);
+      ctx.clip();
+      const body = ctx.createLinearGradient(0, wallTop, 0, board.height);
+      body.addColorStop(0, '#50536c');
+      body.addColorStop(0.3, '#3b3d50');
+      body.addColorStop(1, '#2a2c3a');
+      ctx.fillStyle = body;
+      ctx.fillRect(x, wallTop, w, h);
+      const depth = ctx.createLinearGradient(inner, 0, inner + side * 36, 0);
+      depth.addColorStop(0, 'rgba(10, 11, 18, 0.35)');
+      depth.addColorStop(1, 'rgba(10, 11, 18, 0)');
+      ctx.fillStyle = depth;
+      ctx.fillRect(x, wallTop, w, h);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      const step = 30;
+      for (let yy = wallTop + step; yy < board.height; yy += step) {
+        for (let xx = inner + side * (step / 2); side < 0 ? xx > lo : xx < hi; xx += side * step) {
+          ctx.beginPath();
+          ctx.arc(xx, yy, 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.fillRect(x, wallTop, w, 2.5);
+      ctx.restore();
+      const shade = ctx.createLinearGradient(inner, 0, inner - side * 22, 0);
+      shade.addColorStop(0, 'rgba(28, 29, 38, 0.14)');
+      shade.addColorStop(1, 'rgba(28, 29, 38, 0)');
+      ctx.fillStyle = shade;
+      ctx.fillRect(side < 0 ? inner : inner - 22, wallTop + shoulder / 2, 22, board.floorY - wallTop - shoulder / 2);
+    }
   }
 
   // A hit bumper springs: it pops big, then wobbles back while a ring rolls outward.
