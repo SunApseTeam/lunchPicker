@@ -1,22 +1,38 @@
 // Uploads the team's face photos in team-faces/ to the public "team" bucket of the shared
 // Supabase project, replacing files of the same name.
 //
-// Needs the project's secret key in SUPABASE_SECRET_KEY (Project Settings > API Keys > Secret
-// keys), set in the environment or in the git-ignored .env file at the project root. The key is
-// only sent to Supabase; never commit it or paste it anywhere else.
+// Needs the project's secret key (Project Settings > API Keys > Secret keys). It is asked for
+// when the script runs, without echoing it, and kept in memory only; SUPABASE_SECRET_KEY in the
+// environment or a git-ignored .env file at the project root works too. The key is only sent to
+// Supabase; never commit it or paste it anywhere else.
 //   node tools/upload-team-photos.mjs
 //
 // Only <member id>.png and <member id>-squish.png files are sent.
 import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { SUPABASE_URL } from '../src/infrastructure/config.js';
 
+// Reads a line from the terminal without showing what is typed or pasted.
+function askHidden(question) {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    process.stdout.write(question);
+    rl._writeToOutput = () => {};
+    rl.question('', (answer) => {
+      rl.close();
+      process.stdout.write('\n');
+      resolve(answer);
+    });
+  });
+}
+
 const envFile = fileURLToPath(new URL('../.env', import.meta.url));
 if (existsSync(envFile)) process.loadEnvFile(envFile);
-const key = process.env.SUPABASE_SECRET_KEY?.trim();
+const key = (process.env.SUPABASE_SECRET_KEY || (await askHidden('Supabase secret key (붙여 넣고 Enter, 화면에 안 보임): '))).trim();
 if (!key) {
-  console.error('SUPABASE_SECRET_KEY is not set. See the top of this file.');
+  console.error('No key given.');
   process.exit(1);
 }
 
