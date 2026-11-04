@@ -1,7 +1,7 @@
 import { createLunchService } from '../../application/lunch.js';
 import { todayString } from '../../domain/date.js';
 import { DT, boardWidth, createBoard, equalWidths, maxSlots, mulberry32, randomBumpers } from '../../domain/physics.js';
-import { createRound, stepRound } from '../../domain/round.js';
+import { createRound, stepAfter, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
 import { DEFAULT_TEAM, memberPhysics, parseMember } from '../../domain/team.js';
@@ -118,21 +118,27 @@ function setPhase(next) {
   renderResult();
 }
 
-// The picked members fall from where they wait on the drop line.
+// Everyone falls from where they wait on the drop line; only the picked members' landings count.
+// The rest are along to knock them about.
 function drop() {
   if (phase.name !== 'idle' || dropProblem()) return;
   audio.unlock();
   accumulator = 0;
   const spots = benchSpots();
-  const members = bench.chosen();
-  const from = members.map((m) => spots.find((s) => s.member === m));
-  const players = members.map((m, i) => ({ physics: memberPhysics(settings, m), x: from[i].x }));
+  const members = spots.map((s) => s.member);
+  const from = spots;
+  const players = members.map((m, i) => ({ physics: memberPhysics(settings, m), x: from[i].x, counts: bench.isSelected(m) }));
   const round = createRound(board, players, Math.random, slotMenus.map((m) => m.id));
   // Where each one really starts (on the board, clear of the others) versus where they stood.
   const now = performance.now() / 1000;
   hop = { at: now, gap: round.world.balls.map((b) => ({ x: from[b.player].x - b.cx, y: from[b.player].y - b.cy })) };
   setPhase({ name: 'running', round, members });
-  for (const m of members) bench.shout(m, 'drop', now);
+  for (const m of bench.chosen()) bench.shout(m, 'drop', now);
+}
+
+// Who counts in the round on screen, and where they landed: [{ member, slot }].
+function results() {
+  return phase.round.winners.flatMap((slot, i) => (slot === null ? [] : [{ member: phase.members[i], slot }]));
 }
 
 function backToIdle() {
@@ -145,7 +151,7 @@ function backToIdle() {
 
 async function confirmResult() {
   if (phase.name !== 'result' || saving) return;
-  const picked = phase.round.winners.map((slot) => slotMenus[slot]);
+  const picked = results().map(({ slot }) => slotMenus[slot]);
   saving = true;
   try {
     await lunch.recordPicks(picked.map((m) => m.id));
@@ -188,19 +194,21 @@ function onEngineEvent(event) {
   else if (event.type === 'redrop') {
     audio.redrop();
     bench.shout(phase.members[event.ball.player], 'drop', now);
-  }
-  else if (event.type === 'done') {
+  } else if (event.type === 'unclaim') {
+    // Knocked out of the place they had: they have something to say about that.
+    bench.shout(phase.members[event.ball.player], 'bounce', now);
+  } else if (event.type === 'done') {
     audio.win(event.winners.length);
     renderer.celebrate(board, event.winners);
-    for (const m of phase.members) bench.shout(m, 'win', now);
+    for (const { member } of results()) bench.shout(member, 'win', now);
     setPhase({ ...phase, name: 'result' });
   }
 }
 
-// Slow motion is for the moment of truth: past the pegs, not yet in a slot. Once every moving
-// ball is in a slot the outcome is decided, so time runs at full speed to the result.
+// Slow motion is for the moment of truth: a picked member past the pegs, not yet in a slot. The
+// others bouncing about in the slots do not hold it in slow motion.
 function inFinale(round) {
-  const moving = round.world.balls.filter((b) => !b.settled);
+  const moving = round.world.balls.filter((b) => !b.settled && round.players[b.player].counts);
   return moving.length > 0 && moving.every((b) => b.cy > board.pegBottom + 30) && moving.some((b) => b.zone === null);
 }
 
@@ -221,6 +229,14 @@ function frame(nowMs) {
   } else {
     timeScale = 1;
   }
+  // After the result, the members who did not count keep tumbling down to rest.
+  if (phase.name === 'result') {
+    accumulator += dt;
+    for (let steps = 0; accumulator >= DT && steps < 40; steps++) {
+      stepAfter(phase.round);
+      accumulator -= DT;
+    }
+  }
   const now = nowMs / 1000;
   const away = new Set(phase.members.map((m) => m.id));
   const spots = benchSpots();
@@ -229,13 +245,14 @@ function frame(nowMs) {
     board,
     world: phase.round?.world,
     slotMenus,
-    winners: phase.name === 'result' ? phase.round.winners : null,
+    winners: phase.name === 'result' ? results().map(({ slot }) => slot) : null,
     view: { mode: phase.name, slowmo },
     now,
     dt,
     bench: { spots, bounds, isSelected: bench.isSelected, speeches: bench.chatter(now, spots, away, bounds), away, shoutOf: bench.shoutOf },
     liftOf,
     memberOf: (ball) => phase.members[ball.player],
+    pickedOf: (ball) => phase.round?.players[ball.player].counts === true,
     faces,
   });
 }
@@ -269,7 +286,7 @@ function renderResult() {
     overlay.hidden = true;
     return;
   }
-  const picked = phase.round.winners.map((slot, i) => ({ menu: slotMenus[slot], color: SLOT_COLORS[slot % SLOT_COLORS.length], member: phase.members[i] }));
+  const picked = results().map(({ slot, member }) => ({ menu: slotMenus[slot], color: SLOT_COLORS[slot % SLOT_COLORS.length], member }));
   $('#result-title').textContent = picked.length > 1 ? `오늘은 ${picked.length}곳으로 나눠 가요` : '오늘의 점심은';
   $('#result-names').innerHTML = picked
     .map(({ menu, color, member }) => {

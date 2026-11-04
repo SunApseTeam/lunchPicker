@@ -54,3 +54,23 @@ test('the team comes from the store, skipping inactive rows, and an empty table 
   assert.deepEqual((await lunch(rows).listMembers()).map((m) => m.id), [TEAM[0].id]);
   assert.equal((await lunch([]).listMembers()).length, TEAM.length);
 });
+
+test('when the whole team drops, only the picked land in places; the rest never claim one', () => {
+  const rng = mulberry32(21);
+  for (let round = 0; round < 12; round++) {
+    const n = 3 + (round % 4);
+    const k = 1 + (round % Math.min(3, n - 1));
+    const board = createBoard(equalWidths(n), DEFAULT_SETTINGS.size, randomBumpers(rng, boardWidth(n)));
+    const picked = new Set([...TEAM.keys()].sort(() => rng() - 0.5).slice(0, k));
+    const step = Math.max(board.width / TEAM.length, 130);
+    const left = board.width / 2 - (step * TEAM.length) / 2;
+    const players = TEAM.map((m, i) => ({ physics: memberPhysics(DEFAULT_SETTINGS, m), x: left + step * (i + 0.5), counts: picked.has(i) }));
+    const r = createRound(board, players, rng);
+    for (let i = 0; i < 90 / DT && !r.done; i++) stepRound(r);
+    assert.ok(r.done, `round ${round} (${k} of ${n}) finished`);
+    r.winners.forEach((slot, i) => assert.equal(slot === null, !picked.has(i), `player ${i} ${picked.has(i) ? 'counts' : 'does not count'}`));
+    const landed = r.winners.filter((w) => w !== null);
+    assert.equal(new Set(landed).size, k, `distinct places: ${landed}`);
+    for (const ball of r.owners.values()) assert.ok(picked.has(ball.player), 'only a picked member holds a place');
+  }
+});

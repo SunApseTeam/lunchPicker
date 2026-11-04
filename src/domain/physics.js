@@ -13,6 +13,12 @@ const MAX_SLOT_BOUNCES = 2;
 // A ball that lands on a settled ball is sent on toward a free slot every time, up to this
 // safety cap, rather than left to pile up on it.
 const MAX_SETTLED_BOUNCES = 8;
+// A ball coming down onto one resting in a slot shoves it the other way: up to this speed, in
+// proportion to how fast the newcomer was falling (from SHOVE_FROM up). Hard enough, it knocks
+// the resting ball over the divider and out of its slot.
+const SHOVE = 600;
+const SHOVE_FROM = 250;
+const SHOVE_FULL = 1100;
 // Bumper kicks and peg scatter set how wild a path looks. Tuned on single drops: about five
 // sharp left-right reversals per drop and 1.3 board widths of sideways travel, while the landing
 // slot stays unrelated to where the ball was dropped.
@@ -607,8 +613,11 @@ function slotBounces(world, emit) {
     let side = (base.settled && towardFree(world, a.cx)) || (Math.abs(dx) > 6 ? Math.sign(dx) : rng() < 0.5 ? -1 : 1);
     const hop = board.width / (board.slotEdges.length - 1);
     if (a.cx + side * hop < 0 || a.cx + side * hop > board.width) side = -side;
+    const fall = a.inVy ?? a.vy;
     setVelocity(a, side * (430 + rng() * 120), -(760 + rng() * 120));
-    for (const p of base.pts) if (p.y < base.cy) p.py -= 5;
+    const shove = SHOVE * Math.min(1, Math.max(0, (fall - SHOVE_FROM) / (SHOVE_FULL - SHOVE_FROM)));
+    if (shove > 0) setVelocity(base, -side * shove * 0.6, -shove);
+    else for (const p of base.pts) if (p.y < base.cy) p.py -= 5;
     a.bounceAt = world.time;
     a.slotBounces += 1;
     emit({ type: 'hit', kind: 'slotBounce', ball: a, target: base, speed: 900 });

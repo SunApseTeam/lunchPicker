@@ -13,7 +13,7 @@ const KNOCKS = new Set(['bounce', 'bump']);
 // A waiting member pauses this long (seconds, picked at random) between lines.
 const PAUSE = [1.2, 5];
 // Bubble width on the board, roughly, to keep two bubbles from covering each other.
-export const BUBBLE_FONT = 28;
+export const BUBBLE_FONT = 22;
 const bubbleWidth = (line) => line.length * BUBBLE_FONT + 36;
 
 export function createBench(team, rng = Math.random) {

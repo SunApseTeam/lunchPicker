@@ -692,7 +692,7 @@ export function createRenderer(canvas) {
         ctx.lineTo(bx + 6, by - 4);
         ctx.stroke();
       }
-      ctx.font = `700 ${Math.min(22, Math.round(spot.r * 0.6))}px "IBM Plex Sans KR", sans-serif`;
+      ctx.font = `700 ${Math.min(18, Math.round(spot.r * 0.5))}px "IBM Plex Sans KR", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.lineWidth = 5;
@@ -703,19 +703,20 @@ export function createRenderer(canvas) {
     }
     for (const said of bench.speeches) {
       const spot = bench.spots.find((s) => s.member === said.member);
-      if (spot) drawBubble(said.line, spot, now - said.at, said.life, bench.bounds);
+      if (spot) drawBubble(said.line, spot, now - said.at, said.life, bench.bounds, said.member.color);
     }
   }
 
   // Pops in over the speaker's head and fades out at the end of its life.
-  function drawBubble(text, spot, age, life, { lo, hi }) {
+  // The bubble is edged in the speaker's colour, like their ball.
+  function drawBubble(text, spot, age, life, { lo, hi }, color = INK) {
     const pop = Math.min(1, age / 0.18);
     const scale = 0.6 + 0.4 * (1 - (1 - pop) ** 3);
     const fade = Math.max(0, Math.min(1, (life - age) / 0.3));
     if (fade <= 0) return;
     ctx.font = `700 ${BUBBLE_FONT}px "IBM Plex Sans KR", sans-serif`;
-    const w = ctx.measureText(text).width + 36;
-    const h = 54;
+    const w = ctx.measureText(text).width + 30;
+    const h = 44;
     const tipY = spot.y - spot.r - 10;
     ctx.save();
     ctx.globalAlpha = fade;
@@ -733,11 +734,41 @@ export function createRenderer(canvas) {
     ctx.lineTo(10, -11);
     ctx.fill();
     ctx.shadowBlur = 0;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    // Paint over the stroke where the tail joins the box, so the edge runs round both as one.
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-8.5, -12.5, 17, 4);
     ctx.fillStyle = INK;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, x + w / 2, -h / 2 - 10);
     ctx.restore();
+  }
+
+  // A picked member wears the same red ring and tick while falling as while waiting, so everyone
+  // can follow the ones who count among the whole team tumbling down.
+  function drawPickMark(b) {
+    ctx.strokeStyle = ACCENT;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(b.cx, b.cy, b.R + 7, 0, Math.PI * 2);
+    ctx.stroke();
+    const bx = b.cx + b.R * 0.72;
+    const by = b.cy - b.R * 0.72;
+    ctx.fillStyle = ACCENT;
+    ctx.beginPath();
+    ctx.arc(bx, by, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(bx - 5, by);
+    ctx.lineTo(bx - 1, by + 4);
+    ctx.lineTo(bx + 6, by - 4);
+    ctx.stroke();
   }
 
   // Screen point (CSS pixels on the canvas) to board coordinates.
@@ -746,7 +777,7 @@ export function createRenderer(canvas) {
   }
 
   let board = null;
-  function draw({ board: current, world, slotMenus, winners, view, now, dt, bench, memberOf, faces, liftOf }) {
+  function draw({ board: current, world, slotMenus, winners, view, now, dt, bench, memberOf, pickedOf, faces, liftOf }) {
     board = current;
     const balls = world?.balls ?? [];
     const span = bench
@@ -769,12 +800,17 @@ export function createRenderer(canvas) {
       fn();
       ctx.restore();
     };
-    for (const b of balls) lifted(b, () => drawBall(b, now, memberOf?.(b), faces));
+    for (const b of balls) {
+      lifted(b, () => {
+        drawBall(b, now, memberOf?.(b), faces);
+        if (pickedOf?.(b)) drawPickMark(b);
+      });
+    }
     // Falling members' lines go over every ball, so no ball hides another one's bubble.
     const all = { lo: Math.min(0, bench?.bounds.lo ?? 0), hi: Math.max(board.width, bench?.bounds.hi ?? 0) };
     for (const b of balls) {
       const said = bench?.shoutOf(memberOf?.(b), now);
-      if (said) lifted(b, () => drawBubble(said.line, { x: b.cx, y: b.cy, r: b.R }, now - said.at, said.life, all));
+      if (said) lifted(b, () => drawBubble(said.line, { x: b.cx, y: b.cy, r: b.R }, now - said.at, said.life, all, said.member.color));
     }
     drawParticles(dt);
   }
