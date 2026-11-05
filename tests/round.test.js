@@ -13,8 +13,10 @@ import {
   mulberry32,
   physicsFrom,
   randomBumpers,
+  slotWidthsWithTrigger,
   springSlots,
   stepWorld,
+  triggerWidth,
 } from '../src/domain/physics.js';
 import { createRound, stepRound } from '../src/domain/round.js';
 
@@ -108,11 +110,12 @@ test('a single drop settles within 20 simulated seconds, at the softest and the 
   }
 });
 
-test('the candidate cap keeps every equal-width slot wide enough for a ball', () => {
+test('the candidate cap keeps every slot beside the trigger slot wide enough for a ball', () => {
   assert.equal(maxSlots(DEFAULT_SETTINGS.size), 8);
   for (let size = 24; size <= 56; size += 4) {
     const n = maxSlots(size);
-    assert.ok(1200 / n >= minSlotWidth(size), `size ${size}: ${n} slots of ${1200 / n}px fit a ball`);
+    const room = (1200 - triggerWidth(size)) / n;
+    assert.ok(room >= minSlotWidth(size), `size ${size}: ${n} slots of ${room}px fit a ball`);
   }
 });
 
@@ -226,46 +229,41 @@ test('narrow boards finish even when nearly every slot gets a ball', () => {
   }
 });
 
-// The spring trigger: pressed once by the first member to roll over it, it arms the springs.
-// When the result would be called they wind up instead, throw every ball in the slots back up,
-// and the round comes to its result once everyone is down again.
-test('the trigger is pressed once, and the springs throw everyone up before the result', () => {
-  let pressed = 0;
-  for (let seed = 1; seed <= 10; seed++) {
-    const plain = createBoard(equalWidths(3), physics.radius);
-    // Under the bottom pegs, where the second ball (dropped from higher up) passes once the
-    // first is in a slot.
-    const board = createBoard(equalWidths(3), physics.radius, undefined, { x: plain.width * 0.5, y: plain.pegBottom + 110 });
-    const round = createRound(board, [{ physics, x: board.width * 0.3 }, { physics, x: board.width * 0.7 }], mulberry32(seed));
-    round.world.balls[1].pts.forEach((p) => {
-      p.y -= 600;
-      p.py -= 600;
-    });
-    const events = [];
-    let thrownUp = 0;
-    for (let i = 0; i < 90 / DT && !round.done; i++) {
-      stepRound(round, (e) => {
-        events.push(e);
-        if (e.type === 'spring') {
-          // The throw shows on the next step, once the ball has moved.
-          stepRound(round);
-          thrownUp = e.balls.filter((b) => b.vy < -300).length;
-        }
-      });
+// The spring trigger slot: one extra slot among the places' slots, with a button for a floor.
+test('the trigger slot sits among the places, which share the rest of the board equally', () => {
+  for (let n = 2; n <= maxSlots(physics.radius); n++) {
+    for (let at = 0; at <= n; at++) {
+      const widths = slotWidthsWithTrigger(n, physics.radius, at);
+      assert.equal(widths.length, n + 1);
+      assert.ok(Math.abs(widths.reduce((a, b) => a + b, 0) - boardWidth(n + 1)) < 1e-6);
+      assert.equal(widths[at], triggerWidth(physics.radius));
+      for (const [i, w] of widths.entries()) if (i !== at) assert.ok(w >= minSlotWidth(physics.radius), `${n} places: ${Math.round(w)} fits a ball`);
     }
+  }
+});
+
+test('a ball dropping into the trigger slot presses it once, springing every slot at that moment', () => {
+  let pressedRounds = 0;
+  for (let seed = 1; seed <= 12; seed++) {
+    const at = 1;
+    const widths = slotWidthsWithTrigger(3, physics.radius, at);
+    const board = createBoard(widths, physics.radius, [], at);
+    const x = (board.slotEdges[at] + board.slotEdges[at + 1]) / 2;
+    const round = createRound(board, [0.3, 0.5, 0.7, 0.5].map((f, i) => ({ physics, x: i === 1 ? x : board.width * f, counts: i < 2 })), mulberry32(seed));
+    const events = [];
+    for (let i = 0; i < 90 / DT && !round.done; i++) stepRound(round, (e) => events.push({ ...e, step: i }));
+    assert.ok(round.done, `seed ${seed}: finished`);
+    assert.ok(!round.winners.includes(at), `seed ${seed}: the trigger slot is nobody's place`);
     const presses = events.filter((e) => e.type === 'trigger');
     const springs = events.filter((e) => e.type === 'spring');
+    assert.ok(presses.length <= 1, `seed ${seed}: pressed at most once`);
+    assert.equal(springs.length, presses.length, `seed ${seed}: a spring for each press`);
     if (presses.length === 0) continue;
-    assert.equal(presses.length, 1, `seed ${seed}: pressed once`);
-    assert.equal(springs.length, 1, `seed ${seed}: sprung once`);
-    assert.equal(springs[0].balls.length, 2, `seed ${seed}: both balls were down in the slots`);
-    assert.equal(thrownUp, 2, `seed ${seed}: both thrown up`);
-    assert.equal(events.filter((e) => e.type === 'windup').length, 1, `seed ${seed}: wound up once`);
-    pressed += 1;
-    assert.ok(events.findIndex((e) => e.type === 'done') > events.indexOf(springs[0]), `seed ${seed}: the result waits for the spring`);
-    assert.ok(round.done, `seed ${seed}: finished`);
+    pressedRounds += 1;
+    assert.equal(springs[0].step, presses[0].step, `seed ${seed}: the springs go off the moment it is pressed`);
+    assert.ok(springs[0].balls.includes(presses[0].ball), `seed ${seed}: the one who pressed it is thrown up too`);
   }
-  assert.ok(pressed >= 5, `pressed in ${pressed} of 10 rounds`);
+  assert.ok(pressedRounds >= 4, `pressed in ${pressedRounds} of 12 rounds`);
 });
 
 test('the springs throw every ball in the slots back up, settled ones too, and no other', () => {

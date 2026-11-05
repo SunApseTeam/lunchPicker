@@ -84,14 +84,12 @@ export function createRenderer(canvas) {
       if (event.kind === 'bumper') burst(event.target.x, event.target.y, theme.glow, 20, 520);
     } else if (event.type === 'redrop') {
       burst(event.ball.cx, event.ball.cy, MUTED, 24, 320);
-    } else if (event.type === 'trigger' && board?.trigger) {
-      fx.press(board.trigger, now);
-      burst(board.trigger.x, board.trigger.y, theme.trigger.cap, 26, 620);
-      burst(board.trigger.x, board.trigger.y, '#ffffff', 14, 420);
-    } else if (event.type === 'windup' && board?.trigger) {
-      fx.windUp(board.trigger, now);
-    } else if (event.type === 'spring' && board?.trigger) {
-      fx.spring(board.trigger, now);
+    } else if (event.type === 'trigger' && board) {
+      fx.press(board, now);
+      const x = (board.slotEdges[board.triggerSlot] + board.slotEdges[board.triggerSlot + 1]) / 2;
+      burst(x, board.floorY - 20, theme.trigger.cap, 30, 760);
+      burst(x, board.floorY - 20, '#ffffff', 16, 520);
+    } else if (event.type === 'spring' && board) {
       for (let i = 0; i < board.slotEdges.length - 1; i++) {
         const x = (board.slotEdges[i] + board.slotEdges[i + 1]) / 2;
         burst(x, board.floorY - 10, theme.trigger.cap, 14, 700);
@@ -200,6 +198,10 @@ export function createRenderer(canvas) {
     for (let i = 0; i < slotMenus.length; i++) {
       const x0 = board.slotEdges[i];
       const x1 = board.slotEdges[i + 1];
+      if (slotMenus[i].trigger) {
+        fx.drawTriggerSlot(board, theme, now, x0, x1);
+        continue;
+      }
       const color = SLOT_COLORS[i % SLOT_COLORS.length];
       const won = winners?.includes(i);
       ctx.fillStyle = hexToRgba(color, won ? 0.6 + 0.2 * Math.sin(now * 8) : 0.32);
@@ -272,7 +274,6 @@ export function createRenderer(canvas) {
         else theme.peg(ctx, peg, glow);
       });
     }
-    fx.drawTrigger(board, theme, now);
     drawRipples(now);
   }
 

@@ -128,19 +128,13 @@ export function createAudio() {
       if (muted || !ctx) return;
       voice('sawtooth', 900, 0.08, 0.35, ctx.currentTime, 0, 140);
     },
-    // The trigger: a sharp click and a little rising chirp as the springs are armed.
+    // The trigger slot's button: a heavy click as it goes down.
     trigger(x, boardWidth) {
       if (muted || !ctx) return;
       const now = ctx.currentTime;
       const pan = (x / boardWidth) * 1.6 - 0.8;
       thump(2400, 0.5, 0.05, pan);
-      voice('square', 1200, 0.1, 0.06, now, pan);
-      voice('triangle', 500, 0.15, 0.25, now + 0.05, pan, 1400);
-    },
-    // The springs winding up: a rising whine over the half second before they let go.
-    windUp() {
-      if (muted || !ctx) return;
-      voice('sawtooth', 160, 0.12, 0.5, ctx.currentTime, 0, 900);
+      voice('square', 900, 0.12, 0.07, now, pan);
     },
     // The springs letting go: a deep boing from every slot at once and a thud.
     spring() {

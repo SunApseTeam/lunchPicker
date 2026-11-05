@@ -1,6 +1,6 @@
 import { createLunchService } from '../../application/lunch.js';
 import { todayString } from '../../domain/date.js';
-import { DT, boardWidth, createBoard, equalWidths, maxSlots, mulberry32, randomBumpers, randomTrigger } from '../../domain/physics.js';
+import { DT, boardWidth, createBoard, maxSlots, mulberry32, randomBumpers, slotWidthsWithTrigger } from '../../domain/physics.js';
 import { createRound, stepAfter, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
@@ -73,17 +73,24 @@ let menus = keptMenus ?? [];
 // Today's candidates: place id -> how many slots it takes. A place more people want gets more
 // slots, so it is likelier to be picked, but it is still one place: see createRound's groups.
 const picks = new Map();
+// What each slot on the board stands for, left to right: the places, and among them the spring
+// trigger's slot, which is nobody's place.
+const TRIGGER_SLOT = { trigger: true, id: null, name: '' };
 let slotMenus = [];
-// One seed per round: the layout stays put while candidates are toggled, and fits whatever
-// board width the slot count gives.
-// The spring trigger moves with them, to one of the hard-to-reach spots clear of the bumpers.
+let board = null;
+// One seed per round: the bumpers and the trigger slot stay put while candidates are toggled,
+// and fit whatever board width the slot count gives.
 let bumperSeed = Math.random() * 2 ** 32;
-function boardFor(n) {
+// Lays out the board for places in this order, with the trigger slot slipped in among them.
+function layOut(places) {
+  const n = places.length;
   const rng = mulberry32(bumperSeed);
-  const bumpers = randomBumpers(rng, boardWidth(n));
-  return createBoard(equalWidths(n), settings.size, bumpers, randomTrigger(rng, boardWidth(n), bumpers));
+  const bumpers = randomBumpers(rng, boardWidth(n + 1));
+  const at = Math.floor(rng() * (n + 1));
+  slotMenus = [...places.slice(0, at), TRIGGER_SLOT, ...places.slice(at)];
+  board = createBoard(slotWidthsWithTrigger(n, settings.size, at), settings.size, bumpers, at);
 }
-let board = boardFor(2);
+layOut([{ name: '?' }, { name: '?' }]);
 
 // idle: board ready. running: balls in flight. result: winners shown, waiting for 확정 or 다시.
 // members[i] is the team member who fell as player i of the round.
@@ -132,12 +139,12 @@ function shuffle(list) {
 function rebuildBoard({ reshuffle = false } = {}) {
   if (phase.name !== 'idle') return;
   const next = candidatesValid() ? candidateSlots() : null;
-  const same = next && idsKey(next) === idsKey(slotMenus);
-  if (!next) slotMenus = [{ name: '?' }, { name: '?' }];
-  else if (same && !reshuffle) slotMenus = slotMenus.map((s) => next.find((m) => m.id === s.id));
-  else slotMenus = shuffle(next);
+  const places = slotMenus.filter((s) => !s.trigger);
+  const same = next && idsKey(next) === idsKey(places);
   if (reshuffle) bumperSeed = Math.random() * 2 ** 32;
-  board = boardFor(slotMenus.length);
+  if (!next) layOut([{ name: '?' }, { name: '?' }]);
+  else if (same && !reshuffle) layOut(places.map((s) => next.find((m) => m.id === s.id)));
+  else layOut(shuffle(next));
 }
 
 function setPhase(next) {
@@ -226,8 +233,6 @@ function onEngineEvent(event) {
   } else if (event.type === 'trigger') {
     audio.trigger(event.ball.cx, board.width);
     bench.shout(phase.members[event.ball.player], 'trigger', now);
-  } else if (event.type === 'windup') {
-    audio.windUp();
   } else if (event.type === 'spring') {
     audio.spring();
   } else if (event.type === 'unclaim') {
@@ -525,7 +530,7 @@ if (new URLSearchParams(location.search).has('debug')) {
     bench: () => benchSpots().map((s) => ({ id: s.member.id, x: s.x, y: s.y, r: s.r, picked: bench.isSelected(s.member) })),
     members: () => phase.members.map((m) => m.id),
     winners: () => phase.round?.winners ?? null,
-    trigger: () => ({ at: board.trigger, pressed: phase.round?.trigger.at ?? null, sprung: phase.round?.trigger.sprung ?? false }),
+    trigger: () => ({ slot: board.triggerSlot, pressed: phase.round?.trigger.at ?? null }),
     said: () => phase.members.map((m) => bench.shoutOf(m, performance.now() / 1000)?.line ?? null),
   };
 }
