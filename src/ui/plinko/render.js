@@ -1,7 +1,9 @@
 import { menuIcon } from '../../domain/icon.js';
 import { BUBBLE_FONT } from './bench.js';
 import { FRAME, cameraTarget, createCamera, followCamera, onScreen } from './camera.js';
-import { createMeadow } from './meadow.js';
+import { createGround } from './ground.js';
+import { hexToRgba } from './themes/art.js';
+import { themeById } from './themes/index.js';
 
 export const SLOT_COLORS = [
   '#ff6b6b', '#ffb347', '#ffe066', '#7bd389', '#4fd1c5', '#5ab8ff',
@@ -11,18 +13,10 @@ const BALL_COLORS = ['#ffe066', '#4fd1c5', '#ff6b6b', '#8c9eff', '#ff8ad8'];
 const INK = '#1c1d26';
 const MUTED = '#8a8c9c';
 const ACCENT = '#f96262';
-const PINK = '#ff4d7d';
-// There is no board panel: the balls fall through the meadow. Pegs are little flowers, bumpers
-// pink blossoms, the side walls hedges, the dividers fence posts and the slots picnic mats, all
-// inked like the meadow but crisper and bigger than anything in it.
-const LEAF = '#8cc46c';
-const LEAF_LIGHT = '#a9d88a';
-const LEAF_DARK = '#679c4b';
-const OUTLINE = 'rgba(80, 110, 58, 0.8)';
-const PETAL_INK = 'rgba(120, 110, 80, 0.6)';
-const WOOD = '#c8955f';
-const WOOD_INK = '#8a5f38';
-// How far the side hedges reach past the board when nothing wider stands above them.
+// There is no board panel: the balls fall over the ground of the chosen map theme (themes/),
+// which also draws the pegs, bumpers and side walls, crisper and bigger than anything in the
+// ground. The slots are mats in their colours with the place's name on a cream sign.
+// How far the side walls reach past the board when nothing wider stands above them.
 const HEDGE = 90;
 // Room under the waiting line for the members' names, above where thick walls begin.
 const NAME_ROOM = 46;
@@ -33,15 +27,11 @@ const SCARED_SPEED = 750;
 const knockStrength = (speed) => Math.min(1, Math.max(0, (speed - 100) / 800));
 const winceTime = (strength) => 0.2 + 0.3 * strength;
 
-function hexToRgba(hex, alpha) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-}
-
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   const camera = createCamera();
-  const meadow = createMeadow();
+  const ground = createGround();
+  let theme = themeById('meadow');
   const flash = new Map();
   // slot -> when its lid started closing, so the lid can slide shut.
   const lidAt = new Map();
@@ -89,7 +79,7 @@ export function createRenderer(canvas) {
       // Ball-on-ball knocks (plain contact or a slot bounce) hurt both.
       if (event.target?.pts) hurt(event.target, event.speed, now);
       if (event.target) flash.set(event.target, now);
-      if (event.kind === 'bumper') burst(event.target.x, event.target.y, PINK, 20, 520);
+      if (event.kind === 'bumper') burst(event.target.x, event.target.y, theme.glow, 20, 520);
     } else if (event.type === 'redrop') {
       burst(event.ball.cx, event.ball.cy, MUTED, 24, 320);
     }
@@ -166,8 +156,8 @@ export function createRenderer(canvas) {
       ctx.fillRect(x0, board.dividerTop, x1 - x0, board.height - board.dividerTop);
       const half = ((x1 - x0) / 2) * ease;
       const mid = (x0 + x1) / 2;
-      ctx.fillStyle = WOOD;
-      ctx.strokeStyle = WOOD_INK;
+      ctx.fillStyle = theme.wood.fill;
+      ctx.strokeStyle = theme.wood.ink;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.roundRect(mid - half, board.lidY - 8, half * 2, 12, 5);
@@ -177,12 +167,12 @@ export function createRenderer(canvas) {
   }
 
   // span: how far the scene reaches sideways (wider than the board when the waiting line is),
-  // and wallTop: where the hedges start, just under the waiting line's names.
+  // and wallTop: where the side walls start, just under the waiting line's names.
   function drawBoard(board, slotMenus, winners, world, now, span) {
-    drawHedges(board, span);
+    drawWalls(board, span);
 
     ctx.setLineDash([10, 16]);
-    ctx.strokeStyle = 'rgba(80, 110, 58, 0.3)';
+    ctx.strokeStyle = theme.dropLine;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(40, board.dropY);
@@ -190,7 +180,7 @@ export function createRenderer(canvas) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Each slot is a picnic mat in its colour, with the place's name on a little cream sign.
+    // Each slot is a mat in its colour, with the place's name on a little cream sign.
     for (let i = 0; i < slotMenus.length; i++) {
       const x0 = board.slotEdges[i];
       const x1 = board.slotEdges[i + 1];
@@ -240,9 +230,9 @@ export function createRenderer(canvas) {
         ctx.fillText(label, cx, mid);
       }
     }
-    // The floor is a fence rail; the dividers are its posts.
-    ctx.fillStyle = WOOD;
-    ctx.strokeStyle = WOOD_INK;
+    // The floor is a rail; the dividers are its posts.
+    ctx.fillStyle = theme.wood.fill;
+    ctx.strokeStyle = theme.wood.ink;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.roundRect(-4, board.floorY - 3, board.width + 8, 6, 3);
@@ -260,85 +250,20 @@ export function createRenderer(canvas) {
     for (const peg of board.pegs) {
       const glow = Math.max(0, 1 - (now - (flash.get(peg) ?? -10)) / 0.35);
       wobbled(peg, now, () => {
-        if (peg.kind === 'bumper') drawBumper(peg, now - (flash.get(peg) ?? -10), now, glow);
-        else if (peg.kind === 'wall') drawBushPuff(peg, board, glow);
-        else drawFlowerPeg(peg, glow);
+        if (peg.kind === 'bumper') theme.bumper(ctx, peg, now - (flash.get(peg) ?? -10), now, glow);
+        else if (peg.kind === 'wall') theme.wallBump(ctx, peg, board, glow);
+        else theme.peg(ctx, peg, glow);
       });
     }
     drawRipples(now);
   }
 
-  // A peg is a little white flower with a dark-inked rim; a knock blushes it pink for a moment.
-  function drawFlowerPeg(peg, glow) {
-    const { x, y, r } = peg;
-    if (glow > 0) {
-      ctx.fillStyle = hexToRgba(PINK, 0.3 * glow);
-      ctx.beginPath();
-      ctx.arc(x, y, r * 1.5 + 12 * glow, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    const turn = x * 0.37 + y * 0.11;
-    ctx.fillStyle = 'rgba(60, 90, 40, 0.18)';
-    ctx.beginPath();
-    ctx.ellipse(x + 2, y + 4, r * 1.3, r * 1.1, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = PETAL_INK;
-    ctx.fillStyle = glow > 0.3 ? '#ffc4d4' : '#ffffff';
-    for (let i = 0; i < 5; i++) {
-      const a = turn + (i / 5) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.arc(x + Math.cos(a) * r * 0.75, y + Math.sin(a) * r * 0.75, r * 0.64, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-    ctx.fillStyle = '#ffd75e';
-    ctx.beginPath();
-    ctx.arc(x, y, r * 0.46, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  function tinyFlower(x, y, p, color) {
-    ctx.fillStyle = color;
-    ctx.strokeStyle = PETAL_INK;
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.arc(x + Math.cos(a) * p * 0.8, y + Math.sin(a) * p * 0.8, p * 0.7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-    ctx.fillStyle = '#ffd75e';
-    ctx.beginPath();
-    ctx.arc(x, y, p * 0.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Leafy puffs filling a shape already set as the clip, laid in staggered rows from `inner`.
-  function leaves(inner, side, top, bottom, far) {
-    const step = 34;
-    let row = 0;
-    for (let yy = top + 12; yy < bottom + step; yy += step * 0.8, row++) {
-      for (let xx = inner + side * (row % 2 ? step * 0.5 : 0); side < 0 ? xx > far - step : xx < far + step; xx += side * step) {
-        ctx.fillStyle = (row + Math.round(xx / step)) % 3 === 0 ? LEAF_LIGHT : LEAF;
-        ctx.beginPath();
-        ctx.arc(xx, yy, step * 0.58, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(80, 110, 58, 0.35)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(xx, yy, step * 0.58, Math.PI * 1.1, Math.PI * 1.9);
-        ctx.stroke();
-      }
-    }
-  }
-
-  // Hedges line both sides of the board, from just under the waiting line's names down past the
-  // slots. They are as thick as the waiting line reaches past the board, or HEDGE at least.
-  function drawHedges(board, { lo, hi, wallTop }) {
+  // The side walls line both sides of the board, from just under the waiting line's names down
+  // past the slots. They are as thick as the waiting line reaches past the board, or HEDGE at
+  // least. The theme fills them in.
+  function drawWalls(board, { lo, hi, wallTop }) {
     const bottom = board.height + FRAME;
+    const wall = theme.wall;
     for (const side of [-1, 1]) {
       const inner = side < 0 ? 0 : board.width;
       const far = side < 0 ? Math.min(lo, -HEDGE) : Math.max(hi, board.width + HEDGE);
@@ -347,10 +272,10 @@ export function createRenderer(canvas) {
       const shoulder = Math.min(40, w / 2);
       const radii = side < 0 ? [18, shoulder, 0, 0] : [shoulder, 18, 0, 0];
       ctx.save();
-      ctx.shadowColor = 'rgba(40, 70, 28, 0.35)';
+      ctx.shadowColor = wall.shadow;
       ctx.shadowBlur = 18;
       ctx.shadowOffsetY = 6;
-      ctx.fillStyle = LEAF_DARK;
+      ctx.fillStyle = wall.dark;
       ctx.beginPath();
       ctx.roundRect(x, wallTop, w, bottom - wallTop, radii);
       ctx.fill();
@@ -359,93 +284,14 @@ export function createRenderer(canvas) {
       ctx.beginPath();
       ctx.roundRect(x, wallTop, w, bottom - wallTop, radii);
       ctx.clip();
-      leaves(inner, side, wallTop, bottom, far);
-      let n = 0;
-      for (let yy = wallTop + 50; yy < bottom - 20; yy += 70) {
-        tinyFlower(inner + side * (16 + ((n * 37) % Math.max(1, w - 30))), yy, 4.5, ['#ffffff', '#f7c6d9', '#cdb8f0'][n % 3]);
-        n++;
-      }
+      theme.wallTexture(ctx, { inner, side, top: wallTop, bottom, far, w });
       ctx.restore();
-      ctx.strokeStyle = OUTLINE;
+      ctx.strokeStyle = wall.outline;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.roundRect(x, wallTop, w, bottom - wallTop, radii);
       ctx.stroke();
     }
-  }
-
-  // A wall bump is a round bush pushing out of the hedge into the board.
-  function drawBushPuff(peg, board, glow) {
-    const { x, y, r } = peg;
-    const side = x <= 0 ? -1 : 1;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(side < 0 ? -1 : board.width - r - 2, y - r - 4, r + 3, r * 2 + 8);
-    ctx.clip();
-    ctx.fillStyle = LEAF_DARK;
-    ctx.beginPath();
-    ctx.arc(x, y, r + 1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = LEAF;
-    ctx.beginPath();
-    ctx.arc(x, y, r - 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = hexToRgba('#c6eba8', 0.65 + 0.35 * glow);
-    ctx.beginPath();
-    ctx.ellipse(x - side * r * 0.35, y - r * 0.32, r * 0.32, r * 0.2, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(x, y, r, side < 0 ? -Math.PI / 2 : Math.PI / 2, side < 0 ? Math.PI / 2 : Math.PI * 1.5);
-    ctx.stroke();
-    tinyFlower(x - side * r * 0.5, y + r * 0.25, 4, '#ffffff');
-    ctx.restore();
-  }
-
-  // A bumper is a pink blossom. A hit springs it: it pops big, then wobbles back while a ring
-  // rolls outward. At rest it breathes and turns a little so it reads as something to aim for.
-  function drawBumper(peg, since, now, glow) {
-    const spring = since < 1 ? 0.7 * Math.exp(-5 * since) * Math.cos(24 * since) : 0;
-    const scale = 1 + spring + 0.06 * Math.sin(now * 3 + peg.x);
-    const r = peg.r * scale;
-    if (since < 0.45) {
-      const t = since / 0.45;
-      ctx.strokeStyle = hexToRgba(PINK, 0.6 * (1 - t));
-      ctx.lineWidth = 6 * (1 - t) + 1;
-      ctx.beginPath();
-      ctx.arc(peg.x, peg.y, peg.r * (1.6 + 3.4 * t), 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.fillStyle = hexToRgba(PINK, 0.12 + 0.3 * glow);
-    ctx.beginPath();
-    ctx.arc(peg.x, peg.y, r * 1.9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(60, 90, 40, 0.18)';
-    ctx.beginPath();
-    ctx.ellipse(peg.x + 3, peg.y + 6, r * 1.4, r * 1.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    const turn = now * 0.4 + peg.x;
-    ctx.lineWidth = 1.8;
-    ctx.strokeStyle = 'rgba(200, 70, 115, 0.75)';
-    ctx.fillStyle = '#ff9bbb';
-    for (let i = 0; i < 8; i++) {
-      const a = turn + (i / 8) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.ellipse(peg.x + Math.cos(a) * r * 0.85, peg.y + Math.sin(a) * r * 0.85, r * 0.55, r * 0.36, a, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-    ctx.fillStyle = '#ffd0de';
-    ctx.beginPath();
-    ctx.arc(peg.x, peg.y, r * 0.62, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffd75e';
-    ctx.strokeStyle = PETAL_INK;
-    ctx.beginPath();
-    ctx.arc(peg.x, peg.y, r * 0.34, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
   }
 
   function blobPath(pts) {
@@ -872,7 +718,7 @@ export function createRenderer(canvas) {
     const s = camera.scale;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    meadow.draw(ctx, { width, height, dpr, now, cam: camera, board });
+    ground.draw(ctx, { theme, width, height, dpr, now, cam: camera, board });
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - camera.x * s), dpr * (height / 2 - camera.y * s));
     drawBoard(board, slotMenus, winners, world, now, span);
     drawBench(bench, now, faces);
@@ -910,8 +756,8 @@ export function createRenderer(canvas) {
       const d = Math.hypot(peg.x - p.x, peg.y - p.y);
       if (d < POKE_REACH) pokes.set(peg, { at: now, s: 1 - d / POKE_REACH });
     }
-    burst(p.x, p.y, '#ffffff', 6, 260);
-    burst(p.x, p.y, '#ffc4d4', 6, 260);
+    burst(p.x, p.y, theme.poke[0], 6, 260);
+    burst(p.x, p.y, theme.poke[1], 6, 260);
   }
 
   // A waiting member clicked gives a springy hop.
@@ -919,5 +765,9 @@ export function createRenderer(canvas) {
     jiggles.set(member.id, now);
   }
 
-  return { resize, draw, onEvent, celebrate, toBoard, poke, jiggle, visible: (ball) => onScreen(camera, ball, width, height) };
+  function setTheme(id) {
+    theme = themeById(id);
+  }
+
+  return { resize, draw, onEvent, celebrate, toBoard, poke, jiggle, setTheme, visible: (ball) => onScreen(camera, ball, width, height) };
 }

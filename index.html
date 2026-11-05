@@ -31,12 +31,18 @@
   <link rel="modulepreload" href="src/ui/plinko/bench.js">
   <link rel="modulepreload" href="src/ui/plinko/camera.js">
   <link rel="modulepreload" href="src/ui/plinko/faces.js">
+  <link rel="modulepreload" href="src/ui/plinko/ground.js">
   <link rel="modulepreload" href="src/ui/plinko/icon-picker.js">
-  <link rel="modulepreload" href="src/ui/plinko/meadow.js">
   <link rel="modulepreload" href="src/ui/plinko/menu-panel.js">
   <link rel="modulepreload" href="src/ui/plinko/render.js">
   <link rel="modulepreload" href="src/ui/plinko/settings-dialog.js">
   <link rel="modulepreload" href="src/ui/plinko/tag-editor.js">
+  <link rel="modulepreload" href="src/ui/plinko/themes/art.js">
+  <link rel="modulepreload" href="src/ui/plinko/themes/beach.js">
+  <link rel="modulepreload" href="src/ui/plinko/themes/index.js">
+  <link rel="modulepreload" href="src/ui/plinko/themes/meadow.js">
+  <link rel="modulepreload" href="src/ui/plinko/themes/night.js">
+  <link rel="modulepreload" href="src/ui/plinko/themes/snow.js">
   <link rel="modulepreload" href="src/ui/shared/dom.js">
   <!-- display=block: text waits (up to 3 seconds) for the web fonts instead of showing in the system
        font and jumping when they arrive. sw.js keeps them, so a return visit has them at once. -->
@@ -183,6 +189,24 @@
     #board { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
     #stage-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 15px; background: #dcebc0; }
     #stage-loading .spinner { width: 20px; height: 20px; }
+    #theme-picker {
+      position: absolute; top: 14px; right: 14px; z-index: 2;
+      display: flex; gap: 2px; padding: 4px;
+      background: rgba(255, 255, 255, 0.82); border-radius: 999px;
+      box-shadow: 0 4px 14px rgba(20, 30, 20, 0.16);
+      backdrop-filter: blur(6px);
+    }
+    #theme-picker button {
+      display: flex; align-items: center; gap: 5px;
+      border: 0; background: none; border-radius: 999px;
+      padding: 6px 9px; font: inherit; font-size: 13px; color: var(--ink); cursor: pointer;
+    }
+    #theme-picker button span { font-size: 17px; line-height: 1; }
+    #theme-picker button b { display: none; font-weight: 700; }
+    #theme-picker button[aria-pressed="true"] { background: #fff; box-shadow: 0 1px 4px rgba(20, 30, 20, 0.18); padding-right: 12px; }
+    #theme-picker button[aria-pressed="true"] b { display: inline; }
+    #theme-picker button:hover:not([aria-pressed="true"]) { background: rgba(255, 255, 255, 0.7); }
+    #theme-picker button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     #result {
       /* At the top, clear of the slots: the camera parks on them and each winner speaks over theirs. */
       position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
@@ -340,6 +364,12 @@
       aside { grid-row: 2; border-right: 0; border-top: 1px solid var(--line); padding: 20px 16px; overflow: visible; }
       .list-scroll { overflow: visible; }
       #result-names li { font-size: 32px; }
+      /* On a phone the top of the board holds the waiting line and its bubbles and the bottom the
+         slots: the theme buttons stand small and upright over the right-hand wall instead. */
+      #theme-picker { top: 50%; right: 6px; transform: translateY(-50%); flex-direction: column; padding: 3px; }
+      #theme-picker button { padding: 5px 7px; }
+      #theme-picker button[aria-pressed="true"] { padding-right: 7px; }
+      #theme-picker button[aria-pressed="true"] b { display: none; }
     }
   </style>
 </head>
@@ -398,6 +428,7 @@
   </aside>
   <main>
     <canvas id="board" aria-label="플링코 보드"></canvas>
+    <div id="theme-picker" role="group" aria-label="맵 테마"></div>
     <div id="stage-loading" aria-live="polite"><span class="spinner" aria-hidden="true"></span>판 까는 중…</div>
     <div id="result" hidden role="dialog" aria-labelledby="result-title">
       <button id="result-close" aria-label="기록하지 않고 닫기" title="기록하지 않고 닫기 (X 또는 Esc)">

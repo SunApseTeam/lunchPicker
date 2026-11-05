@@ -62,7 +62,8 @@ export const GEOMETRY = {
   pegRows: 8,
   rowGap: 125,
   colGap: 190,
-  pegRadius: 9,
+  // Pegs big enough that a falling ball meets plenty of them.
+  pegRadius: 13,
   bumperRadius: 18,
   wallBumpRadius: 45,
   dividerHalfWidth: 4,
@@ -72,7 +73,9 @@ export const GEOMETRY = {
   slotRoom: 250,
 };
 const BUMPER_COUNT = 8;
-const PEG_MARGIN = 125;
+// The outermost pegs of the even rows stand this far in from the walls: a full-size ball (56) still
+// fits past the peg with a few pixels to spare.
+const PEG_MARGIN = 129;
 
 export function physicsFrom(settings) {
   const soft = settings.softness / 100;
@@ -119,19 +122,20 @@ function pegColumns(width, row) {
   return xs;
 }
 
-// Each round gets its own bumper layout, as many bumpers as the board is wide for. Bumpers skip
-// the top row (straight under the drop) and the bottom one (just over the slots), and an even
-// row's outermost peg: a bumper there narrows the wall gap below a big ball. No two bumpers
-// touch, so their kicks never stack.
+// Each round gets its own bumper layout: as many bumpers as the board is wide for, plus one, so
+// even the narrowest board has four. Bumpers skip the top row (straight under the drop) and an
+// even row's outermost peg: a bumper there narrows the wall gap below a big ball. The bottom row
+// may have them, kicking balls about just over the slots. No two bumpers touch, so their kicks
+// never stack.
 export function randomBumpers(rng, width = GEOMETRY.width) {
   const g = GEOMETRY;
   const spots = [];
-  for (let row = 1; row < g.pegRows - 1; row++) {
+  for (let row = 1; row < g.pegRows; row++) {
     for (const x of pegColumns(width, row)) {
       if (row % 2 === 1 || (x > PEG_MARGIN && x < width - PEG_MARGIN)) spots.push({ row, x });
     }
   }
-  const count = Math.round((BUMPER_COUNT * width) / g.width);
+  const count = Math.round((BUMPER_COUNT * width) / g.width) + 1;
   // Random picks that may not touch can box themselves in short of the count, so a few fresh
   // tries are made and the fullest kept.
   let best = [];
