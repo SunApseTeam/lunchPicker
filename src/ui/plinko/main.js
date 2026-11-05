@@ -16,6 +16,7 @@ import { createFaces } from './faces.js';
 import { createIconPicker } from './icon-picker.js';
 import { createMenuPanel } from './menu-panel.js';
 import { SLOT_COLORS, createRenderer } from './render.js';
+import { THEMES } from './themes/index.js';
 import { createSettingsDialog } from './settings-dialog.js';
 import { createTagEditor } from './tag-editor.js';
 
@@ -67,6 +68,7 @@ function showTeam(team) {
 
 let settings = loadSettings(DEFAULT_SETTINGS);
 audio.setMuted(!settings.sound);
+renderer.setTheme(settings.theme);
 let menus = keptMenus ?? [];
 // Today's candidates: place id -> how many slots it takes. A place more people want gets more
 // slots, so it is likelier to be picked, but it is still one place: see createRound's groups.
@@ -421,6 +423,8 @@ function applySettings(next) {
   settings = next;
   saveSettings(settings);
   audio.setMuted(!settings.sound);
+  renderer.setTheme(settings.theme);
+  renderThemes();
   if (sizeChanged) rebuildBoard();
   settingsDialog.render();
   renderControls();
@@ -430,6 +434,17 @@ const settingsDialog = createSettingsDialog({
   settings: () => settings,
   onChange: applySettings,
   sizeNote: (s) => `이 크기로는 후보를 최대 ${maxSlots(s.size)}개까지 넣을 수 있어요. 다음 판부터 적용돼요.`,
+});
+
+// The map theme buttons on the board: the picked one shows its name.
+function renderThemes() {
+  $('#theme-picker').innerHTML = THEMES.map(
+    (t) => `<button type="button" data-theme="${t.id}" aria-pressed="${t.id === settings.theme}" title="${escapeHtml(t.name)}"><span aria-hidden="true">${t.icon}</span><b>${escapeHtml(t.name)}</b></button>`,
+  ).join('');
+}
+$('#theme-picker').addEventListener('click', (e) => {
+  const button = e.target instanceof Element && e.target.closest('button[data-theme]');
+  if (button && button.dataset.theme !== settings.theme) applySettings({ ...settings, theme: button.dataset.theme });
 });
 
 // Clicking a waiting member picks them for the next drop, or puts them back.
@@ -506,6 +521,7 @@ new ResizeObserver(() => renderer.resize()).observe(canvas);
 window.addEventListener('resize', () => renderer.resize());
 
 settingsDialog.render();
+renderThemes();
 setPhase({ name: 'idle', round: null, members: [] });
 renderer.resize();
 requestAnimationFrame(frame);
