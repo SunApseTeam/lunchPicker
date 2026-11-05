@@ -155,10 +155,12 @@ test('once a ball stops bouncing in a slot the result follows within about a sec
   assert.ok(Math.max(...lags) < 1.2, `slowest wait after the last bounce ${Math.max(...lags).toFixed(2)}s`);
 });
 
+// Over 300 drops about two in three move on (63% both with the old small pegs and the bigger ones
+// with a bumper row over the slots); 120 drops keep the estimate within the bounds.
 test('a landed ball often bounces on into another slot', () => {
   let landed = 0;
   let moved = 0;
-  for (let seed = 1; seed <= 60; seed++) {
+  for (let seed = 1; seed <= 120; seed++) {
     const rng = mulberry32(seed);
     const round = createRound(createBoard(equalWidths(6), physics.radius, randomBumpers(rng)), players(1), rng);
     const ball = round.world.balls[0];
@@ -170,7 +172,7 @@ test('a landed ball often bounces on into another slot', () => {
     landed += 1;
     if (round.winners[0] !== first) moved += 1;
   }
-  assert.ok(moved / landed > 0.3 && moved / landed < 0.7, `${moved} of ${landed} balls moved on from their first slot`);
+  assert.ok(moved / landed > 0.3 && moved / landed < 0.75, `${moved} of ${landed} balls moved on from their first slot`);
 });
 
 test('every round can get its own bumper layout, and none of them traps a ball', () => {
@@ -178,20 +180,26 @@ test('every round can get its own bumper layout, and none of them traps a ball',
   for (let seed = 1; seed <= 30; seed++) {
     const bumpers = randomBumpers(mulberry32(seed));
     layouts.add(JSON.stringify(bumpers));
-    assert.equal(bumpers.length, 8);
+    assert.equal(bumpers.length, 9);
     for (const a of bumpers) {
-      assert.ok(a.row >= 1 && a.row <= 6, `bumper row ${a.row}`);
+      assert.ok(a.row >= 1 && a.row <= 7, `bumper row ${a.row}`);
       for (const b of bumpers) {
         if (a !== b) assert.ok(Math.abs(a.row - b.row) > 1 || Math.abs(a.x - b.x) > 190, 'bumpers do not touch');
       }
     }
     const board = createBoard(equalWidths(6), physics.radius, bumpers);
-    assert.equal(board.pegs.filter((p) => p.kind === 'bumper').length, 8);
+    assert.equal(board.pegs.filter((p) => p.kind === 'bumper').length, 9);
     const round = createRound(board, players(3), mulberry32(seed));
     for (let i = 0; i < 90 / DT && !round.done; i++) stepRound(round);
     assert.ok(round.done, `layout ${seed} finished`);
   }
   assert.ok(layouts.size > 25, `${layouts.size} different layouts`);
+});
+
+test('even the narrowest boards get four bumpers', () => {
+  for (const slots of [2, 3]) {
+    for (let seed = 1; seed <= 10; seed++) assert.equal(randomBumpers(mulberry32(seed), boardWidth(slots)).length, 4, `${slots} slots`);
+  }
 });
 
 test('with few slots the board narrows, so a slot is about as wide for 2 as for 6', () => {
