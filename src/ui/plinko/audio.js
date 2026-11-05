@@ -128,6 +128,28 @@ export function createAudio() {
       if (muted || !ctx) return;
       voice('sawtooth', 900, 0.08, 0.35, ctx.currentTime, 0, 140);
     },
+    // The trigger: a sharp click and a little rising chirp as the springs are armed.
+    trigger(x, boardWidth) {
+      if (muted || !ctx) return;
+      const now = ctx.currentTime;
+      const pan = (x / boardWidth) * 1.6 - 0.8;
+      thump(2400, 0.5, 0.05, pan);
+      voice('square', 1200, 0.1, 0.06, now, pan);
+      voice('triangle', 500, 0.15, 0.25, now + 0.05, pan, 1400);
+    },
+    // The springs winding up: a rising whine over the half second before they let go.
+    windUp() {
+      if (muted || !ctx) return;
+      voice('sawtooth', 160, 0.12, 0.5, ctx.currentTime, 0, 900);
+    },
+    // The springs letting go: a deep boing from every slot at once and a thud.
+    spring() {
+      if (muted || !ctx) return;
+      const now = ctx.currentTime;
+      for (const [i, pan] of [-0.6, 0, 0.6].entries()) boing(now + i * 0.03, pan);
+      voice('sine', 90, 0.6, 0.45, now, 0, 45);
+      thump(180, 0.5, 0.2, 0);
+    },
     win(count) {
       if (muted || !ctx) return;
       const at = ctx.currentTime + 0.05;

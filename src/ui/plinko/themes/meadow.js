@@ -92,6 +92,7 @@ export const meadow = {
   wood: { fill: '#c8955f', ink: '#8a5f38' },
   wall: WALL,
   poke: ['#ffffff', '#ffc4d4'],
+  trigger: { cap: '#ffcf3f', rim: '#b9791a', glow: '#ffe27a' },
 
   // Background flowers stay tiny and faint so they never pass for the pegs, and there are no
   // bushes, which would pass for walls.

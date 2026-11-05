@@ -52,6 +52,7 @@ export const snowfield = {
   wood: { fill: '#b98a62', ink: '#7d5638' },
   wall: WALL,
   poke: ['#ffffff', '#cfe3ff'],
+  trigger: { cap: '#59b7ff', rim: '#2a6fb0', glow: '#cfe9ff' },
 
   // Snow with soft blue drifts, wind ridges and sparkles.
   tile(ctx, rnd, wrapped, size) {

@@ -1,8 +1,10 @@
-import { DT, createWorld, dropBall, removeBall, stepWorld } from './physics.js';
+import { DT, createWorld, dropBall, removeBall, springSlots, stepWorld, touchesTrigger } from './physics.js';
 
 const DROP_MARGIN = 30;
 // How long everyone must have been down in the slots before the result is called.
 const DOWN_HOLD = 0.5;
+// How long the springs wind up before they let go: long enough to see it coming.
+const SPRING_DELAY = 0.5;
 
 const clearOf = (world, x, y, r) => world.balls.every((b) => Math.hypot(b.cx - x, b.cy - y) > b.R + r + 8);
 
@@ -32,7 +34,9 @@ export function createRound(board, players, rng, groups = board.slotEdges.slice(
   const world = createWorld(board, rng, players[0].physics);
   players.forEach((player, i) => dropPlayer(world, player, i, player.x));
   // owners: group -> the ball that claimed it.
-  return { world, players, groups, owners: new Map(), done: false, winners: null };
+  // trigger: who pressed the board's trigger and when, when the springs started winding up and
+  // whether they have gone off. It works once a round.
+  return { world, players, groups, owners: new Map(), done: false, winners: null, trigger: { by: null, at: null, windUp: null, sprung: false } };
 }
 
 const counts = (round, ball) => round.players[ball.player].counts !== false;
@@ -62,22 +66,55 @@ function claimPlaces(round, emit) {
   world.closed = new Set(groups.flatMap((group, slot) => (owners.has(group) && owners.get(group).zone !== slot ? [slot] : [])));
 }
 
+// The first member to reach the trigger presses it, once a round. That arms the springs under
+// the slots: they go off when the result would otherwise be called, with everyone down, so a
+// press early in the round is never wasted.
+function pressTrigger(round, emit) {
+  const { world, trigger } = round;
+  if (trigger.by) return;
+  const ball = world.balls.find((b) => touchesTrigger(world.board, b));
+  if (!ball) return;
+  trigger.by = ball;
+  trigger.at = world.time;
+  emit({ type: 'trigger', ball });
+}
+
+// Armed springs wind up for a moment instead of the result being called, then throw everyone in
+// the slots back up. True while that holds the result back.
+function springInstead(round, emit) {
+  const { world, trigger } = round;
+  if (!trigger.by || trigger.sprung) return false;
+  if (trigger.windUp === null) {
+    trigger.windUp = world.time;
+    emit({ type: 'windup' });
+  }
+  if (world.time - trigger.windUp < SPRING_DELAY) return true;
+  trigger.sprung = true;
+  round.downSince = null;
+  emit({ type: 'spring', balls: springSlots(world) });
+  return true;
+}
+
 export function stepRound(round, emit = () => {}) {
   if (round.done) return;
   stepWorld(round.world, emit);
+  pressTrigger(round, emit);
   claimPlaces(round, emit);
   // The result waits until everyone is down in the slots: a straggler landing late can still
   // knock a counted ball out of its place. It is called once everyone has come to rest, or once
   // the ones still jostling in the slots have been down there a moment.
   const balls = round.world.balls.filter((b) => counts(round, b));
   const down = balls.every((b) => b.settled) && round.world.balls.every((b) => b.settled || b.zone !== null);
-  if (!down) {
+  // Once the springs are winding up they go off, whoever has moved meanwhile.
+  const winding = round.trigger.windUp !== null && !round.trigger.sprung;
+  if (!down && !winding) {
     round.downSince = null;
     return;
   }
   round.downSince ??= round.world.time;
   const still = round.world.balls.every((b) => b.settled);
-  if (!still && round.world.time - round.downSince < DOWN_HOLD) return;
+  if (!still && round.world.time - round.downSince < DOWN_HOLD && !winding) return;
+  if (springInstead(round, emit)) return;
   round.done = true;
   // winners[i] is where player i landed, or null for a player that does not count.
   round.winners = round.players.map((p, i) => (p.counts === false ? null : balls.find((b) => b.player === i).slot));

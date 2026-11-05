@@ -59,6 +59,7 @@ export const beach = {
   wood: { fill: '#cdb08a', ink: '#8a6c48' },
   wall: WALL,
   poke: ['#ffffff', '#bfe9f5'],
+  trigger: { cap: '#22b8cf', rim: '#127485', glow: '#a5ecf5' },
 
   // Sand with ripples the tide left, scattered shells and pebbles, and glints.
   tile(ctx, rnd, wrapped, size) {

@@ -1,6 +1,6 @@
 import { createLunchService } from '../../application/lunch.js';
 import { todayString } from '../../domain/date.js';
-import { DT, boardWidth, createBoard, equalWidths, maxSlots, mulberry32, randomBumpers } from '../../domain/physics.js';
+import { DT, boardWidth, createBoard, equalWidths, maxSlots, mulberry32, randomBumpers, randomTrigger } from '../../domain/physics.js';
 import { createRound, stepAfter, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
@@ -76,9 +76,14 @@ const picks = new Map();
 let slotMenus = [];
 // One seed per round: the layout stays put while candidates are toggled, and fits whatever
 // board width the slot count gives.
+// The spring trigger moves with them, to one of the hard-to-reach spots clear of the bumpers.
 let bumperSeed = Math.random() * 2 ** 32;
-const bumpersFor = (n) => randomBumpers(mulberry32(bumperSeed), boardWidth(n));
-let board = createBoard(equalWidths(2), settings.size, bumpersFor(2));
+function boardFor(n) {
+  const rng = mulberry32(bumperSeed);
+  const bumpers = randomBumpers(rng, boardWidth(n));
+  return createBoard(equalWidths(n), settings.size, bumpers, randomTrigger(rng, boardWidth(n), bumpers));
+}
+let board = boardFor(2);
 
 // idle: board ready. running: balls in flight. result: winners shown, waiting for 확정 or 다시.
 // members[i] is the team member who fell as player i of the round.
@@ -132,7 +137,7 @@ function rebuildBoard({ reshuffle = false } = {}) {
   else if (same && !reshuffle) slotMenus = slotMenus.map((s) => next.find((m) => m.id === s.id));
   else slotMenus = shuffle(next);
   if (reshuffle) bumperSeed = Math.random() * 2 ** 32;
-  board = createBoard(equalWidths(slotMenus.length), settings.size, bumpersFor(slotMenus.length));
+  board = boardFor(slotMenus.length);
 }
 
 function setPhase(next) {
@@ -218,6 +223,13 @@ function onEngineEvent(event) {
   else if (event.type === 'redrop') {
     audio.redrop();
     bench.shout(phase.members[event.ball.player], 'drop', now);
+  } else if (event.type === 'trigger') {
+    audio.trigger(event.ball.cx, board.width);
+    bench.shout(phase.members[event.ball.player], 'trigger', now);
+  } else if (event.type === 'windup') {
+    audio.windUp();
+  } else if (event.type === 'spring') {
+    audio.spring();
   } else if (event.type === 'unclaim') {
     // Knocked out of the place they had: they have something to say about that.
     bench.shout(phase.members[event.ball.player], 'bounce', now);
@@ -513,6 +525,7 @@ if (new URLSearchParams(location.search).has('debug')) {
     bench: () => benchSpots().map((s) => ({ id: s.member.id, x: s.x, y: s.y, r: s.r, picked: bench.isSelected(s.member) })),
     members: () => phase.members.map((m) => m.id),
     winners: () => phase.round?.winners ?? null,
+    trigger: () => ({ at: board.trigger, pressed: phase.round?.trigger.at ?? null, sprung: phase.round?.trigger.sprung ?? false }),
     said: () => phase.members.map((m) => bench.shoutOf(m, performance.now() / 1000)?.line ?? null),
   };
 }

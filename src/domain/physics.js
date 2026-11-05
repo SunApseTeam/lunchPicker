@@ -19,6 +19,10 @@ const MAX_SETTLED_BOUNCES = 8;
 const SHOVE = 600;
 const SHOVE_FROM = 250;
 const SHOVE_FULL = 1100;
+// The spring under the slots: how hard it throws every ball in them straight back up. 1250 lifts
+// a ball about 330, past the bottom peg row 250 above the floor, so it is thrown back among the
+// pegs and bumpers and lands all over again.
+const SPRING_SPEED = 1250;
 // Bumper kicks and peg scatter set how wild a path looks. Tuned on single drops: about five
 // sharp left-right reversals per drop and 1.3 board widths of sideways travel, while the landing
 // slot stays unrelated to where the ball was dropped.
@@ -66,6 +70,9 @@ export const GEOMETRY = {
   pegRadius: 13,
   bumperRadius: 18,
   wallBumpRadius: 45,
+  triggerRadius: 12,
+  // How close a ball's middle must come to the trigger to press it: it has to roll right over it.
+  triggerReach: 24,
   dividerHalfWidth: 4,
   // Space from the bottom peg row down to the slot floor. A ball bouncing out of its slot needs
   // headroom under the bottom pegs to carry over into the next one, and a ball coming off the
@@ -152,6 +159,28 @@ export function randomBumpers(rng, width = GEOMETRY.width) {
   return best;
 }
 
+// Where the spring trigger may sit: TRIGGER_BAND from the nearer wall, among the peg rows, clear
+// of every peg and bumper. Balls rarely pass that close to the walls with their middle, so it is
+// pressed in about half of the rounds (measured with the whole team dropping).
+const TRIGGER_BAND = [40, 110];
+// Measured over 60 rounds each, one member counting: pressed in 52% (3 slots), 57% (4) and 48%
+// (6) of rounds, and 61% of 80 on 2 slots with its shorter reach.
+
+export function randomTrigger(rng, width = GEOMETRY.width, bumpers = []) {
+  const g = GEOMETRY;
+  const pegs = buildPegs(g, width, bumpers);
+  const spots = [];
+  // Below the first peg row: right under the drop line nearly every round would press it.
+  for (let y = g.pegTop + g.rowGap; y <= g.pegTop + (g.pegRows - 1) * g.rowGap; y += 10) {
+    for (let x = TRIGGER_BAND[0]; x <= width - TRIGGER_BAND[0]; x += 10) {
+      const edge = Math.min(x, width - x);
+      if (edge > TRIGGER_BAND[1]) continue;
+      if (pegs.every((p) => Math.hypot(p.x - x, p.y - y) > p.r + g.triggerRadius + 10)) spots.push({ x, y });
+    }
+  }
+  return spots[Math.floor(rng() * spots.length)] ?? null;
+}
+
 function buildPegs(g, width, bumpers) {
   const pegs = [];
   for (let row = 0; row < g.pegRows; row++) {
@@ -173,7 +202,8 @@ export const FIXED_BUMPERS = [
   { row: 1, x: 410 }, { row: 1, x: 790 }, { row: 3, x: 600 }, { row: 5, x: 220 }, { row: 5, x: 980 }, { row: 6, x: 505 },
 ];
 
-export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers = FIXED_BUMPERS) {
+// trigger: where the spring trigger sits ({ x, y }), or none. See randomTrigger.
+export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers = FIXED_BUMPERS, trigger = null) {
   const g = GEOMETRY;
   const width = boardWidth(slotWidths.length);
   const total = slotWidths.reduce((a, b) => a + b, 0);
@@ -202,7 +232,33 @@ export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers 
     height: floorY + 90,
     slotEdges,
     dividers,
+    trigger: trigger && { x: trigger.x, y: trigger.y, r: g.triggerRadius },
+    // The 2-slot board is so crowded that 24 pressed it in 73% of rounds; 14 brings it to about
+    // 61%, near the wider boards at 24 (measured with the whole team dropping).
+    triggerReach: width < 500 ? 14 : g.triggerReach,
   };
+}
+
+// Whether a ball presses the trigger: its middle passes right over it. Brushing it with an edge
+// is not enough. The trigger is a pad on the ground, not an obstacle: balls pass over it without
+// being turned.
+export function touchesTrigger(board, b) {
+  const t = board.trigger;
+  return Boolean(t) && b.zone === null && Math.hypot(b.cx - t.x, b.cy - t.y) < board.triggerReach;
+}
+
+// The spring under every slot throws each ball in them back up, a little sideways, so even a
+// ball that had settled goes round again. Returns the balls thrown.
+export function springSlots(world) {
+  const { rng } = world;
+  const thrown = world.balls.filter((b) => b.zone !== null);
+  for (const b of thrown) {
+    setVelocity(b, (rng() * 2 - 1) * 260, -(SPRING_SPEED + rng() * 200));
+    // In the air at once: no slot drag, and its slot bounces start afresh.
+    b.bounceAt = world.time;
+    b.slotBounces = 0;
+  }
+  return thrown;
 }
 
 export function slotAt(board, x) {

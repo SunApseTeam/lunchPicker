@@ -13,6 +13,7 @@ import {
   mulberry32,
   physicsFrom,
   randomBumpers,
+  springSlots,
   stepWorld,
 } from '../src/domain/physics.js';
 import { createRound, stepRound } from '../src/domain/round.js';
@@ -223,4 +224,76 @@ test('narrow boards finish even when nearly every slot gets a ball', () => {
       assert.equal(new Set(round.winners).size, Math.max(1, n - 1));
     }
   }
+});
+
+// The spring trigger: pressed once by the first member to roll over it, it arms the springs.
+// When the result would be called they wind up instead, throw every ball in the slots back up,
+// and the round comes to its result once everyone is down again.
+test('the trigger is pressed once, and the springs throw everyone up before the result', () => {
+  let pressed = 0;
+  for (let seed = 1; seed <= 10; seed++) {
+    const plain = createBoard(equalWidths(3), physics.radius);
+    // Under the bottom pegs, where the second ball (dropped from higher up) passes once the
+    // first is in a slot.
+    const board = createBoard(equalWidths(3), physics.radius, undefined, { x: plain.width * 0.5, y: plain.pegBottom + 110 });
+    const round = createRound(board, [{ physics, x: board.width * 0.3 }, { physics, x: board.width * 0.7 }], mulberry32(seed));
+    round.world.balls[1].pts.forEach((p) => {
+      p.y -= 600;
+      p.py -= 600;
+    });
+    const events = [];
+    let thrownUp = 0;
+    for (let i = 0; i < 90 / DT && !round.done; i++) {
+      stepRound(round, (e) => {
+        events.push(e);
+        if (e.type === 'spring') {
+          // The throw shows on the next step, once the ball has moved.
+          stepRound(round);
+          thrownUp = e.balls.filter((b) => b.vy < -300).length;
+        }
+      });
+    }
+    const presses = events.filter((e) => e.type === 'trigger');
+    const springs = events.filter((e) => e.type === 'spring');
+    if (presses.length === 0) continue;
+    assert.equal(presses.length, 1, `seed ${seed}: pressed once`);
+    assert.equal(springs.length, 1, `seed ${seed}: sprung once`);
+    assert.equal(springs[0].balls.length, 2, `seed ${seed}: both balls were down in the slots`);
+    assert.equal(thrownUp, 2, `seed ${seed}: both thrown up`);
+    assert.equal(events.filter((e) => e.type === 'windup').length, 1, `seed ${seed}: wound up once`);
+    pressed += 1;
+    assert.ok(events.findIndex((e) => e.type === 'done') > events.indexOf(springs[0]), `seed ${seed}: the result waits for the spring`);
+    assert.ok(round.done, `seed ${seed}: finished`);
+  }
+  assert.ok(pressed >= 5, `pressed in ${pressed} of 10 rounds`);
+});
+
+test('the springs throw every ball in the slots back up, settled ones too, and no other', () => {
+  const board = createBoard(equalWidths(3), physics.radius);
+  const world = createWorld(board, mulberry32(4), physics);
+  const low = dropBall(world, board.width * 0.2, 0);
+  const high = dropBall(world, board.width * 0.8, 0);
+  for (let i = 0; i < 12 / DT && !low.settled; i++) stepWorld(world);
+  high.pts.forEach((p) => {
+    p.y = p.py = p.y - (high.cy - board.pegTop);
+  });
+  stepWorld(world);
+  assert.ok(low.settled && high.zone === null);
+  assert.deepEqual(springSlots(world), [low]);
+  stepWorld(world);
+  assert.ok(low.vy < -1000, `thrown up at ${Math.round(-low.vy)}`);
+  let top = low.cy;
+  for (let i = 0; i < 1 / DT; i++) {
+    stepWorld(world);
+    top = Math.min(top, low.cy);
+  }
+  assert.ok(top < board.pegBottom + 40, 'back up among the bottom pegs');
+});
+
+test('a board without a trigger never springs', () => {
+  const round = createRound(createBoard(equalWidths(3), physics.radius), players(2), mulberry32(3));
+  const types = new Set();
+  for (let i = 0; i < 60 / DT && !round.done; i++) stepRound(round, (e) => types.add(e.type));
+  assert.ok(round.done);
+  assert.ok(!types.has('trigger') && !types.has('spring'));
 });

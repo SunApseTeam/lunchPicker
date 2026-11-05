@@ -11,7 +11,7 @@ const toMember = (r) => ({
   softness: r.softness,
   bounce: r.bounce,
   active: r.active,
-  lines: { pick: r.lines_pick, wait: r.lines_wait, drop: r.lines_drop, bounce: r.lines_bounce, bump: r.lines_bump, win: r.lines_win },
+  lines: { pick: r.lines_pick, wait: r.lines_wait, drop: r.lines_drop, bounce: r.lines_bounce, bump: r.lines_bump, win: r.lines_win, trigger: r.lines_trigger },
 });
 const toVisit = (r) => ({
   id: r.id,
