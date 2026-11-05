@@ -6,6 +6,7 @@ import { menuIcon } from '../../domain/icon.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
 import { DEFAULT_TEAM, memberPhysics, parseMember } from '../../domain/team.js';
 import { loadSettings, saveSettings } from '../../infrastructure/settings-storage.js';
+import { readSnapshot, writeSnapshot } from '../../infrastructure/snapshot.js';
 import { createStore, storeMode } from '../../infrastructure/store.js';
 import { teamPhotoUrls } from '../../infrastructure/team-photos.js';
 import { $, escapeHtml, markMode, toast } from '../shared/dom.js';
@@ -30,22 +31,43 @@ const audio = createAudio();
 const canvas = $('#board');
 const renderer = createRenderer(canvas);
 
-// The team comes from the shared store; if it cannot be reached, the built-in team still plays.
+// The scene is drawn at once and filled in as things arrive: the team and the places first,
+// then the face photos. Until the team is here the ledge is empty and shows it is loading.
+// On the shared store, what came last time is kept in this browser and shown straight away
+// while the fresh copy loads.
+const snapshots = mode === 'shared';
+const keptTeam = snapshots ? readSnapshot('members')?.map(parseMember) : null;
+const keptMenus = snapshots ? readSnapshot('menus') : null;
+let loading = { team: true, menus: true };
+let bench = createBench([]);
+let faces = createFaces([], teamPhotoUrls);
+
+// The team comes from the shared store; if it cannot be reached, the last team seen here or else
+// the built-in team still plays.
 async function loadTeam() {
   try {
-    return await lunch.listMembers();
+    const team = await lunch.listMembers();
+    if (snapshots) writeSnapshot('members', team);
+    return team;
   } catch (err) {
     toast(err.message, true);
-    return DEFAULT_TEAM.map(parseMember);
+    return keptTeam ?? DEFAULT_TEAM.map(parseMember);
   }
 }
-const team = await loadTeam();
-const bench = createBench(team);
-const faces = createFaces(team, teamPhotoUrls);
+
+function showTeam(team) {
+  bench = createBench(team);
+  faces = createFaces(team, teamPhotoUrls);
+  loading = { ...loading, team: false };
+  // Everyone hops onto the ledge as they arrive.
+  const now = performance.now() / 1000;
+  for (const m of team) renderer.jiggle(m, now);
+  renderControls();
+}
 
 let settings = loadSettings(DEFAULT_SETTINGS);
 audio.setMuted(!settings.sound);
-let menus = [];
+let menus = keptMenus ?? [];
 // Today's candidates: place id -> how many slots it takes. A place more people want gets more
 // slots, so it is likelier to be picked, but it is still one place: see createRound's groups.
 const picks = new Map();
@@ -249,7 +271,7 @@ function frame(nowMs) {
     view: { mode: phase.name, slowmo },
     now,
     dt,
-    bench: { spots, bounds, isSelected: bench.isSelected, speeches: bench.chatter(now, spots, away, bounds), away, shoutOf: bench.shoutOf },
+    bench: { spots, bounds, isSelected: bench.isSelected, speeches: bench.chatter(now, spots, away, bounds), away, shoutOf: bench.shoutOf, loading: loading.team, radius: settings.size },
     liftOf,
     memberOf: (ball) => phase.members[ball.player],
     pickedOf: (ball) => phase.round?.players[ball.player].counts === true,
@@ -258,6 +280,8 @@ function frame(nowMs) {
 }
 
 function dropProblem() {
+  if (loading.menus) return '가게 목록을 불러오는 중이에요';
+  if (loading.team) return '팀원을 불러오는 중이에요';
   const n = candidates().length;
   const max = maxCandidates();
   if (n < 2) return '후보를 2개 이상 골라 주세요';
@@ -303,6 +327,7 @@ function renderResult() {
 async function loadMenus() {
   try {
     menus = await lunch.listMenus();
+    if (snapshots) writeSnapshot('menus', menus);
   } catch (err) {
     toast(err.message, true);
   }
@@ -480,11 +505,29 @@ if (new URLSearchParams(location.search).has('debug')) {
 new ResizeObserver(() => renderer.resize()).observe(canvas);
 window.addEventListener('resize', () => renderer.resize());
 
-// Today's candidates start empty: the team picks where it feels like going each day.
-await loadMenus();
-rebuildBoard();
-renderMenus();
 settingsDialog.render();
 setPhase({ name: 'idle', round: null, members: [] });
 renderer.resize();
 requestAnimationFrame(frame);
+// The scene stays covered until the web fonts are in (or 3 seconds, as the page text does), so
+// names and lines never show in a stand-in font first.
+Promise.race([document.fonts.ready, new Promise((resolve) => setTimeout(resolve, 3000))]).then(() => $('#stage-loading').remove());
+
+// The team and the places are fetched side by side; each shows up as soon as it is in. What was
+// kept from last time shows first, and gives way only if the fresh copy differs.
+if (keptTeam) showTeam(keptTeam);
+loadTeam().then((team) => {
+  const same = keptTeam && JSON.stringify(team) === JSON.stringify(keptTeam);
+  if (!same && phase.name === 'idle') showTeam(team);
+});
+// Today's candidates start empty: the team picks where it feels like going each day.
+const showMenus = () => {
+  loading = { ...loading, menus: false };
+  rebuildBoard();
+  renderMenus();
+};
+if (keptMenus) showMenus();
+loadMenus().then(showMenus);
+
+// Fonts, photos and the logo are kept in this browser for the next visit (see sw.js).
+if ('serviceWorker' in navigator && mode !== 'demo') navigator.serviceWorker.register('sw.js').catch(() => {});

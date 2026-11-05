@@ -46,6 +46,7 @@ export function createBench(team, rng = Math.random) {
 
   // The stretch the waiting line and its bubbles may use: the board, or the wider ledge.
   function bounds(list, board) {
+    if (list.length === 0) return { lo: 0, hi: board.width };
     const step = list.length > 1 ? list[1].x - list[0].x : board.width;
     return { lo: Math.min(0, list[0].x - step / 2), hi: Math.max(board.width, list.at(-1).x + step / 2) };
   }

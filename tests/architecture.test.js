@@ -27,6 +27,25 @@ const modules = files(SRC).map((path) => {
 });
 const layerOf = (path) => relative(SRC, path).split(sep)[0];
 
+// index.html preloads every module its main.js reaches, so the browser fetches them all at once.
+test('index.html preloads exactly the modules main.js imports', () => {
+  const byPath = new Map(modules.map((m) => [m.path, m]));
+  const entry = resolve(SRC, 'ui/plinko/main.js');
+  const reached = new Set();
+  const visit = (path) => {
+    for (const target of byPath.get(path).imports) {
+      if (reached.has(target)) continue;
+      reached.add(target);
+      visit(target);
+    }
+  };
+  visit(entry);
+  const wanted = [...reached].map((p) => relative(resolve('.'), p).split(sep).join('/')).sort();
+  const html = readFileSync('index.html', 'utf8');
+  const preloaded = [...html.matchAll(/<link rel="modulepreload" href="(.+?)">/g)].map((m) => m[1]).sort();
+  assert.deepEqual(preloaded, wanted);
+});
+
 test('every source file sits in a known layer', () => {
   for (const m of modules) assert.ok(layerOf(m.path) in ALLOWED, `${m.name} is outside the layer folders`);
 });

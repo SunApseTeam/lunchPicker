@@ -713,8 +713,40 @@ export function createRenderer(canvas) {
     return { id: 0, pts, rest, R: spot.r, cx, cy, angle: 0, vx: 0, vy: 0, zone: null, settled: false };
   }
 
+  // While the team is on its way: three dots bobbing on the empty ledge.
+  function drawLoadingDots(x, y, now) {
+    for (let i = 0; i < 3; i++) {
+      const bob = Math.max(0, Math.sin(now * 6 - i * 0.8));
+      ctx.fillStyle = hexToRgba(INK, 0.35 + 0.4 * bob);
+      ctx.beginPath();
+      ctx.arc(x + (i - 1) * 26, y - bob * 12, 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.font = '700 18px "IBM Plex Sans KR", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeText('팀원 부르는 중', x, y + 26);
+    ctx.fillStyle = INK;
+    ctx.fillText('팀원 부르는 중', x, y + 26);
+  }
+
+  // A face photo still on its way: an arc chasing round the ball in the member's colour.
+  function drawPhotoLoading(ball, color, now) {
+    const a = now * 5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(ball.cx, ball.cy, ball.R + 6, a, a + Math.PI * 0.6);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
+
   function drawBench(bench, now, faces) {
     if (!bench) return;
+    if (bench.loading) drawLoadingDots(board.width / 2, board.dropY, now);
     // The picked ones dim the rest only while they wait together; once they drop, the rest cheer.
     const anyPicked = bench.spots.some((s) => !bench.away.has(s.member.id) && bench.isSelected(s.member));
     for (const spot of bench.spots) {
@@ -724,6 +756,7 @@ export function createRenderer(canvas) {
       ctx.globalAlpha = anyPicked && !picked ? 0.55 : 1;
       drawBall(ball, now, spot.member, faces);
       ctx.globalAlpha = 1;
+      if (faces?.loading(spot.member)) drawPhotoLoading(ball, spot.member.color, now);
       if (picked) {
         ctx.strokeStyle = ACCENT;
         ctx.lineWidth = 5;
@@ -833,7 +866,7 @@ export function createRenderer(canvas) {
     board = current;
     const balls = world?.balls ?? [];
     const span = bench
-      ? { ...bench.bounds, wallTop: board.dropY + Math.max(...bench.spots.map((p) => p.r)) + NAME_ROOM }
+      ? { ...bench.bounds, wallTop: board.dropY + Math.max(...bench.spots.map((p) => p.r), bench.spots.length ? 0 : bench.radius) + NAME_ROOM }
       : { lo: 0, hi: board.width, wallTop: 0 };
     followCamera(camera, cameraTarget(board, { ...view, span: span.hi - span.lo }, balls, width, height), dt);
     const s = camera.scale;
