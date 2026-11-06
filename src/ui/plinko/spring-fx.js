@@ -4,10 +4,9 @@
 // It starts shut under a glass cover, like an alarm button's, which flips open once the first
 // member lands in another slot; then the button blinks and sparkles to say it can be pressed.
 // When it is pressed it slams flat with a flash and a ring, every slot's floor kicks up on its
-// spring and wobbles back, the screen shakes hard and "혼란!" pops up across it. Then the button
-// goes grey and the glass cover slams shut again.
-// A member dropped again glows gold behind a ring of spikes all the way down, and anyone not
-// deciding that they touch bursts with a bang.
+// spring and wobbles back and "혼란!" pops up across the screen, which stays still. Then the
+// button goes grey and the glass cover slams shut again.
+// A member dropped again glows gold behind a ring of spikes all the way down.
 import { hexToRgba } from './themes/art.js';
 
 const BANNER_TIME = 1.4;
@@ -22,12 +21,10 @@ const COVER_SHUT = [0.3, 0.5];
 const COVER_SWING = 1.9;
 
 export function createSpringFx(ctx) {
-  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   // board -> when its cover came off and when its button was pressed. Each round's board is its
   // own, so a fresh board starts covered and unpressed.
   const openedAt = new WeakMap();
   const pressedAt = new WeakMap();
-  let shake = { at: -10, power: 0 };
   let bannerAt = -10;
 
   function open(board, now) {
@@ -36,21 +33,7 @@ export function createSpringFx(ctx) {
 
   function press(board, now) {
     pressedAt.set(board, now);
-    jolt(now, 34);
     bannerAt = now;
-  }
-
-  function jolt(now, power) {
-    if (now - shake.at < 0.3 && shake.power > power) return;
-    shake = { at: now, power };
-  }
-
-  // How far the view is jolted right now, in screen pixels.
-  function shakeOffset(now) {
-    const t = now - shake.at;
-    if (still || t > 0.7) return { x: 0, y: 0 };
-    const a = shake.power * Math.exp(-7 * t);
-    return { x: a * Math.sin(t * 83), y: a * Math.cos(t * 67) };
   }
 
   // A four-pointed twinkle.
@@ -373,5 +356,5 @@ export function createSpringFx(ctx) {
     ctx.restore();
   }
 
-  return { open, press, shakeOffset, drawTriggerSlot, drawSprings, drawCharge, drawChargeSparkles, drawBanner };
+  return { open, press, drawTriggerSlot, drawSprings, drawCharge, drawChargeSparkles, drawBanner };
 }

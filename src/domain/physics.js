@@ -170,15 +170,16 @@ function pegColumns(width, row) {
 // even row's outermost peg: a bumper there narrows the wall gap below a big ball. The bottom row
 // may have them, kicking balls about just over the slots. No two bumpers touch, so their kicks
 // never stack.
-export function randomBumpers(rng, width = GEOMETRY.width) {
+// rows: how many peg rows the board has; a taller board gets proportionally more bumpers.
+export function randomBumpers(rng, width = GEOMETRY.width, rows = GEOMETRY.pegRows) {
   const g = GEOMETRY;
   const spots = [];
-  for (let row = 1; row < g.pegRows; row++) {
+  for (let row = 1; row < rows; row++) {
     for (const x of pegColumns(width, row)) {
       if (row % 2 === 1 || (x > PEG_MARGIN && x < width - PEG_MARGIN)) spots.push({ row, x });
     }
   }
-  const count = Math.round((BUMPER_COUNT * width) / g.width) + 1;
+  const count = Math.round((BUMPER_COUNT * width * rows) / (g.width * g.pegRows)) + 1;
   // Random picks that may not touch can box themselves in short of the count, so a few fresh
   // tries are made and the fullest kept.
   let best = [];
@@ -216,9 +217,10 @@ export const FIXED_BUMPERS = [
   { row: 1, x: 410 }, { row: 1, x: 790 }, { row: 3, x: 600 }, { row: 5, x: 220 }, { row: 5, x: 980 }, { row: 6, x: 505 },
 ];
 
-// triggerSlot: which slot is the spring trigger's, or none. See slotWidthsWithTrigger.
-export function createBoard(slotWidths, radius = BALL.size, bumpers = FIXED_BUMPERS, triggerSlot = null) {
-  const g = GEOMETRY;
+// triggerSlot: which slot is the spring trigger's, or none. See slotWidthsWithTrigger. rows: how
+// many peg rows; more make the drop longer, the slots lower down and the board taller.
+export function createBoard(slotWidths, radius = BALL.size, bumpers = FIXED_BUMPERS, triggerSlot = null, rows = GEOMETRY.pegRows) {
+  const g = { ...GEOMETRY, pegRows: rows };
   const width = boardWidth(slotWidths.length);
   const total = slotWidths.reduce((a, b) => a + b, 0);
   const slotEdges = [0];
