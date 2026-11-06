@@ -19,6 +19,7 @@ import { createMenuPanel } from './menu-panel.js';
 import { SLOT_COLORS, createRenderer } from './render.js';
 import { THEMES } from './themes/index.js';
 import { createSettingsDialog } from './settings-dialog.js';
+import { createStatsPanel } from './stats-panel.js';
 import { createTagEditor } from './tag-editor.js';
 import { createVotePicker } from './vote-picker.js';
 
@@ -511,6 +512,10 @@ function applySettings(next) {
 const settingsDialog = createSettingsDialog({
   settings: () => settings,
   onChange: applySettings,
+  onStep() {
+    audio.unlock();
+    audio.tick();
+  },
 });
 
 // The map theme buttons on the board: the picked one shows its name.
@@ -692,7 +697,26 @@ $('#want-more').addEventListener('click', () => setWant(1));
 $('#confirm').addEventListener('click', confirmResult);
 $('#retry').addEventListener('click', retry);
 
+// The records, unrolled over the board. The bar-chart button opens and closes them here too, lit
+// while they are out; a click with a modifier key still opens the page on its own.
+const statsPanel = createStatsPanel({
+  onToggle(open) {
+    $('#open-stats').setAttribute('aria-expanded', String(open));
+    if (open) votePicker.close();
+  },
+});
+$('#open-stats').addEventListener('click', (e) => {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault();
+  if (statsPanel.isOpen()) statsPanel.hide();
+  else statsPanel.show();
+});
+
 document.addEventListener('keydown', (e) => {
+  if (statsPanel.isOpen()) {
+    if (e.key === 'Escape') statsPanel.hide();
+    return;
+  }
   if (settingsDialog.isOpen() || iconPicker.isOpen() || tagEditor.isOpen()) return;
   if (e.target instanceof Element && e.target.closest('input, textarea')) return;
   // Space only ever means "drop", and on a result Enter only ever means "confirm": neither may

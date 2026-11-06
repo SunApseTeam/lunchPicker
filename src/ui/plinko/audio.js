@@ -124,6 +124,12 @@ export function createAudio() {
       if (muted || !ctx) return;
       voice('sine', 160, 0.25, 0.18, ctx.currentTime, (x / boardWidth) * 1.6 - 0.8, 90);
     },
+    // A stepped slider landing on its next step: one short wooden click.
+    tick() {
+      if (muted || !ctx) return;
+      voice('triangle', 1400, 0.1, 0.03, ctx.currentTime, 0, 900);
+      thump(2200, 0.08, 0.02, 0);
+    },
     // The slots mixed up: a quick rattle of wooden clacks.
     shuffle() {
       if (muted || !ctx) return;

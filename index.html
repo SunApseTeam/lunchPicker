@@ -38,6 +38,7 @@
   <link rel="modulepreload" href="src/ui/plinko/render.js">
   <link rel="modulepreload" href="src/ui/plinko/settings-dialog.js">
   <link rel="modulepreload" href="src/ui/plinko/spring-fx.js">
+  <link rel="modulepreload" href="src/ui/plinko/stats-panel.js">
   <link rel="modulepreload" href="src/ui/plinko/tag-editor.js">
   <link rel="modulepreload" href="src/ui/plinko/vote-picker.js">
   <link rel="modulepreload" href="src/ui/plinko/themes/art.js">
@@ -277,6 +278,42 @@
     .foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 12px; }
     kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-family: inherit; }
     main { position: relative; min-width: 0; min-height: 0; }
+    /* The records unroll over the board from the sidebar's edge: the panel is revealed left to
+       right while the page in it slides in after, and rolls back the same way. */
+    #stats-panel {
+      position: absolute; inset: 0; z-index: 8; background: var(--bg); overflow: hidden;
+      clip-path: inset(0 100% 0 0); transition: clip-path .55s cubic-bezier(.75, 0, .2, 1);
+    }
+    #stats-panel[hidden] { display: none; }
+    #stats-panel.open { clip-path: inset(0 0 0 0); }
+    #stats-panel::after {
+      content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 26px; pointer-events: none;
+      background: linear-gradient(90deg, rgba(28, 29, 38, 0.12), transparent);
+    }
+    #stats-frame {
+      display: block; width: 100%; height: 100%; border: 0;
+      transform: translateX(-90px); opacity: .4; transition: transform .6s cubic-bezier(.2, .8, .2, 1) .08s, opacity .45s ease .08s;
+    }
+    #stats-panel.open #stats-frame { transform: none; opacity: 1; }
+    #stats-close {
+      position: absolute; top: 14px; right: 16px; z-index: 1;
+      background: var(--yellow); color: var(--ink); border: 0; border-radius: 12px; padding: 10px 16px; font-weight: 700;
+      box-shadow: 0 4px 14px rgba(28, 29, 38, 0.15);
+    }
+    /* The tab on the sidebar's edge that opens and closes the records: › to open, ‹ to close. */
+    #stats-tab {
+      position: absolute; left: 0; top: 50%; z-index: 9; transform: translateY(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 7px 14px 5px;
+      background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-left: 0; border-radius: 0 14px 14px 0;
+      box-shadow: 4px 4px 16px rgba(28, 29, 38, 0.12); font: 700 13px/1 "IBM Plex Sans KR", sans-serif;
+    }
+    #stats-tab .label { writing-mode: vertical-rl; letter-spacing: 2px; }
+    #stats-tab .chev { font-size: 20px; line-height: 1; color: var(--accent); transition: transform .4s ease; }
+    #stats-tab[aria-expanded="true"] .chev { transform: rotate(180deg); }
+    #stats-tab:hover { background: var(--panel); }
+    @media (prefers-reduced-motion: reduce) {
+      #stats-panel, #stats-frame, #stats-tab .chev { transition: none; }
+    }
     #board { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
     #stage-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 15px; background: #dcebc0; }
     #stage-loading .spinner { width: 20px; height: 20px; }
@@ -353,6 +390,8 @@
       background: none; border: 1px solid var(--line); border-radius: 12px; color: var(--text);
     }
     .icon:hover { border-color: var(--muted); }
+    /* The records button while the records are out: lit, like a tab that is selected. */
+    .icon[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 4px 12px rgba(249, 98, 98, 0.35); }
     .brand-actions { display: flex; gap: 8px; }
     .mode-banner {
       position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5;
@@ -432,6 +471,16 @@
     .row output { color: var(--accent-text); font-weight: 700; min-width: 32px; text-align: right; }
     .row small { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
     .row input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+    /* A stepped slider's marks: one per step, spread under the track from end to end, each a notch
+       over its label. The thumb's half width is kept clear at both ends so the notches line up. */
+    .ticks { grid-column: 1 / -1; display: flex; justify-content: space-between; margin: -4px 8px 0; }
+    .ticks button {
+      position: relative; width: 0; padding: 10px 0 0; border: 0; background: none; display: flex; justify-content: center;
+      font: 600 12px/1 "IBM Plex Sans KR", sans-serif; color: var(--muted); white-space: nowrap; cursor: pointer;
+    }
+    .ticks button::before { content: ""; position: absolute; top: 0; left: -1px; width: 2px; height: 7px; border-radius: 1px; background: var(--line); }
+    .ticks button[aria-pressed="true"] { color: var(--accent-text); font-weight: 700; }
+    .ticks button[aria-pressed="true"]::before { background: var(--accent); }
     .toggle { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
     .toggle input { position: absolute; opacity: 0; }
     .toggle i { position: relative; width: 46px; height: 26px; border-radius: 999px; background: var(--line); transition: background .15s; }
@@ -450,6 +499,7 @@
     body[data-phase="running"] #add-form, body[data-phase="between"] #add-form,
     body[data-phase="running"] #hidden-wrap, body[data-phase="between"] #hidden-wrap { opacity: .5; pointer-events: none; }
     @media (max-width: 860px) {
+      #stats-panel { position: fixed; z-index: 10; }
       #vote-picker { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 70vh; border-radius: 18px 18px 0 0; border-width: 2px 0 0; }
       #picked-so-far { top: auto; bottom: 12px; }
       body { grid-template-columns: 1fr; grid-template-rows: 62vh auto; overflow: auto; }
@@ -472,7 +522,7 @@
       <div class="brand-top">
         <span class="wordmark"><img src="https://i.postimg.cc/Mp49v4Hd/wordmark-transparent-x1.png" alt="sunapse" width="135" height="40"></span>
         <div class="brand-actions">
-        <a href="stats.html" data-keep-mode class="icon" aria-label="기록과 통계" title="기록과 통계">
+        <a id="open-stats" href="stats.html" data-keep-mode class="icon" aria-label="기록과 통계" title="기록과 통계" aria-controls="stats-panel" aria-expanded="false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/></svg>
         </a>
         <button id="open-settings" class="icon" aria-label="설정" title="설정">
@@ -528,6 +578,11 @@
   </aside>
   <main>
     <canvas id="board" aria-label="플링코 보드"></canvas>
+    <button id="stats-tab" type="button" aria-controls="stats-panel" aria-expanded="false" aria-label="기록과 통계 열기" title="기록과 통계"><span class="label">기록</span><span class="chev" aria-hidden="true">›</span></button>
+    <section id="stats-panel" hidden aria-label="기록과 통계">
+      <button id="stats-close" type="button">‹ 플링코로 돌아가기</button>
+      <iframe id="stats-frame" title="기록과 통계"></iframe>
+    </section>
     <div id="theme-picker" role="group" aria-label="맵 테마"></div>
     <div id="stage-loading" aria-live="polite"><span class="spinner" aria-hidden="true"></span>판 까는 중…</div>
     <div id="stage-note" hidden role="status"></div>
@@ -565,9 +620,9 @@
       <label class="toggle"><span>소리</span>
         <input id="set-sound" type="checkbox"><i aria-hidden="true"></i></label>
       <label class="row"><span>속도</span><output id="set-speed-v"></output>
-        <input id="set-speed" type="range" min="0" step="1"><small>공이 떨어지는 빠르기. 떨어지는 중에도 바로 바뀌어요.</small></label>
+        <input id="set-speed" type="range" min="0" step="1"><div class="ticks" id="set-speed-ticks"></div><small>공이 떨어지는 빠르기. 떨어지는 중에도 바로 바뀌어요.</small></label>
       <label class="row"><span>떨어지는 길이</span><output id="set-rows-v"></output>
-        <input id="set-rows" type="range" min="0" step="1"><small>핀 줄이 많을수록 판이 위아래로 길어지고 핀과 범퍼도 늘어요. 다음 판부터 적용돼요.</small></label>
+        <input id="set-rows" type="range" min="0" step="1"><div class="ticks" id="set-rows-ticks"></div><small>핀 줄이 많을수록 판이 위아래로 길어지고 핀과 범퍼도 늘어요. 다음 판부터 적용돼요.</small></label>
       <label class="row"><span>혼란 버튼 열리는 시간</span><output id="set-chaos-v"></output>
         <input id="set-chaos" type="range" min="0" step="1"><small>첫 공이 칸 바닥에 닿은 뒤 이만큼 지나야 혼란 버튼 덮개가 열려요. 다음 판부터 적용돼요.</small></label>
     </div>

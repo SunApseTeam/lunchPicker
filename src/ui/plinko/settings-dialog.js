@@ -3,8 +3,10 @@ import { $ } from '../shared/dom.js';
 
 // The gear-icon popup: sound on or off, how fast the balls fall, how long the drop is (how many
 // peg rows), and how long after the first landing the 혼란 button opens. It reports every change through onChange and redraws from
-// settings(). They are kept in this browser (localStorage) for the next visit.
-export function createSettingsDialog({ settings, onChange }) {
+// settings(). They are kept in this browser (localStorage) for the next visit. Speed and drop
+// length go in steps: each step is marked and labelled under its slider, a label can be pressed
+// to jump there, and onStep (a click) is called whenever the value lands on another step.
+export function createSettingsDialog({ settings, onChange, onStep = () => {} }) {
   const dialog = $('#settings');
   const speed = $('#set-speed');
   const chaos = $('#set-chaos');
@@ -12,6 +14,26 @@ export function createSettingsDialog({ settings, onChange }) {
   speed.max = SPEEDS.length - 1;
   rows.max = ROWS.length - 1;
   chaos.max = CHAOS_DELAY_MAX;
+
+  // The marks under a stepped slider: one label per step, the current one lit.
+  const STEPPED = [
+    { input: speed, ticks: $('#set-speed-ticks'), steps: SPEEDS, label: (v) => `${v}배`, key: 'speed' },
+    { input: rows, ticks: $('#set-rows-ticks'), steps: ROWS, label: (v) => `${v}`, key: 'rows' },
+  ];
+  for (const s of STEPPED) {
+    s.ticks.innerHTML = s.steps.map((v, i) => `<button type="button" data-step="${i}">${s.label(v)}</button>`).join('');
+    s.ticks.addEventListener('click', (e) => {
+      const button = e.target instanceof Element ? e.target.closest('[data-step]') : null;
+      if (button) step(s, Number(button.dataset.step));
+    });
+    s.input.addEventListener('input', (e) => step(s, Number(e.target.value)));
+  }
+
+  function step(s, i) {
+    if (s.steps[i] === settings()[s.key]) return;
+    onStep();
+    onChange({ ...settings(), [s.key]: s.steps[i] });
+  }
 
   function render() {
     const current = settings();
@@ -24,11 +46,12 @@ export function createSettingsDialog({ settings, onChange }) {
     $('#set-rows-v').textContent = `핀 ${current.rows}줄`;
     chaos.value = current.chaosDelay;
     $('#set-chaos-v').textContent = current.chaosDelay === 0 ? '바로' : `${current.chaosDelay}초`;
+    for (const s of STEPPED) {
+      s.ticks.querySelectorAll('[data-step]').forEach((b, i) => b.setAttribute('aria-pressed', String(s.steps[i] === current[s.key])));
+    }
   }
 
   $('#set-sound').addEventListener('change', (e) => onChange({ ...settings(), sound: e.target.checked }));
-  speed.addEventListener('input', (e) => onChange({ ...settings(), speed: SPEEDS[Number(e.target.value)] }));
-  rows.addEventListener('input', (e) => onChange({ ...settings(), rows: ROWS[Number(e.target.value)] }));
   chaos.addEventListener('input', (e) => onChange({ ...settings(), chaosDelay: Number(e.target.value) }));
   $('#settings-reset').addEventListener('click', () => onChange({ ...DEFAULT_SETTINGS }));
   $('#open-settings').addEventListener('click', () => {

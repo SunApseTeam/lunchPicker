@@ -17,6 +17,15 @@ import {
 } from './views.js';
 
 const PAGE_DAYS = 14;
+// Shown inside the plinko page's records panel (?embed): no way back of its own, the panel has
+// one, and Esc closes the panel.
+const embedded = new URLSearchParams(location.search).has('embed');
+if (embedded) {
+  document.documentElement.classList.add('embed');
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !e.target.closest?.('input, select, textarea')) parent.postMessage({ type: 'lunch:close' }, location.origin);
+  });
+}
 
 const mode = storeMode();
 const lunch = createLunchService(createStore(mode), () => todayString());
@@ -126,6 +135,10 @@ $('#more').addEventListener('click', () => {
 // Others record lunches too: refresh when this tab comes back into view, and pick up the plinko
 // page's writes live when both run on this browser's own storage.
 window.addEventListener('storage', render);
+// The panel asks for fresh numbers each time it is opened again.
+window.addEventListener('message', (e) => {
+  if (e.origin === location.origin && e.data?.type === 'lunch:refresh') render();
+});
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') render();
 });
