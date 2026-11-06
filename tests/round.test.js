@@ -342,7 +342,7 @@ test('the springs throw every ball in the slots back up, settled ones too, and n
     stepWorld(world);
     top = Math.min(top, low.cy);
   }
-  assert.ok(top < board.pegBottom + 40, 'back up among the bottom pegs');
+  assert.ok(top < board.pegBottom - 2 * board.rowGap, `flies up through the bottom peg rows (to ${Math.round(board.pegBottom - top)} above them)`);
 });
 
 test('a board without a trigger never springs', () => {

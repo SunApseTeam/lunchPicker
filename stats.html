@@ -71,6 +71,12 @@
     .hbars .bar { display: block; height: 100%; min-width: 4px; background: var(--accent); border-radius: 0 4px 4px 0; }
     .hbars .val { font-weight: 700; min-width: 2.5em; text-align: right; }
     .hbars .bar.tag { background: var(--mint); }
+    .hbars .bar.win { background: #ffc93c; }
+    .winners li { grid-template-columns: 30px minmax(0, 13em) minmax(64px, 1fr) auto; }
+    .winners .who { display: flex; align-items: center; gap: 8px; }
+    .winners .who img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 2px solid var(--who); flex: none; }
+    .winners .who > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .winners .top { display: block; color: var(--muted); font-size: 12px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
     .note { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
 
     .stale li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -164,6 +170,11 @@
         <h2>월별</h2>
         <p class="hint">최근 6개월</p>
         <div id="months"></div>
+      </section>
+      <section class="card wide">
+        <h2>당첨왕</h2>
+        <p class="hint">누구의 픽으로 가장 많이 갔는지, 그 사람 픽이 제일 많이 간 곳과 함께</p>
+        <div id="winners"></div>
       </section>
       <section class="card wide">
         <h2>태그별</h2>
