@@ -99,10 +99,11 @@ export function minSlotWidth(radius) {
   return 2 * radius + SLOT_MARGIN;
 }
 
-// The spring trigger's slot: one extra slot, among the places' slots, with a button for a
-// floor. It is exactly as wide as the biggest ball, narrower than theirs. With the whole team
-// dropping and only a ball's first landing pressing it, that set it off in 65% (2 places), 50%
-// (4) and 45% (6) of 40 rounds each; 30 wider made it 85%, 57% and 43%.
+// The trigger slot: one extra slot, among the places' slots, with a button for a floor. It is
+// exactly as wide as the biggest ball, narrower than theirs. With the whole team dropping and any
+// ball reaching its floor pressing it, that set it off in 100% (2 places), 88% (4) and 93% (6) of
+// 40 rounds each. Narrower slots press less (80 wide: 63%, 45%, 55%), but a big ball can then lodge
+// across the mouth and the round never ends.
 export function triggerWidth(radius) {
   return 2 * radius;
 }
