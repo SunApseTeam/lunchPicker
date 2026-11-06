@@ -1,6 +1,7 @@
 // The team waiting on the drop line. Clicking a member toggles them in or out of the next drop;
 // the ones picked fall from where they stand. Their order is reshuffled every round, so where
-// someone stands gives them no edge. Waiting members chatter, each on their own clock, and the
+// someone stands gives them no edge, and before a drop a member can be dragged to another place
+// in the line. Waiting members chatter, each on their own clock, and the
 // falling ones call out what happens to them.
 const GAP = 18;
 // How long a bubble stays up, by situation. A win line stays until the next round.
@@ -53,6 +54,20 @@ export function createBench(team, rng = Math.random) {
 
   function hit(list, x, y) {
     return list.find((s) => Math.hypot(s.x - x, s.y - y) <= s.r + 6)?.member ?? null;
+  }
+
+  // Which place in the line (0 to its length - 1) is nearest x, for spots from spots().
+  function placeAt(list, x) {
+    if (list.length < 2) return 0;
+    const step = list[1].x - list[0].x;
+    return Math.min(list.length - 1, Math.max(0, Math.round((x - list[0].x) / step)));
+  }
+
+  // Moves a member to stand at place `index`, the others closing up around them.
+  function move(member, index) {
+    const rest = order.filter((m) => m.id !== member.id);
+    rest.splice(Math.min(Math.max(index, 0), rest.length), 0, member);
+    order = rest;
   }
 
   function unpick(id) {
@@ -128,6 +143,8 @@ export function createBench(team, rng = Math.random) {
     spots,
     bounds,
     hit,
+    placeAt,
+    move,
     toggle,
     trim,
     chatter,

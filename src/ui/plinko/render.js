@@ -45,6 +45,9 @@ export function createRenderer(canvas) {
   const pokes = new Map();
   const ripples = [];
   const jiggles = new Map();
+  // Where each waiting member is drawn along the line: member id -> x, easing toward their spot,
+  // so the line slides apart when one is dragged through it.
+  const shownX = new Map();
   const POKE_REACH = 200;
   let width = 0;
   let height = 0;
@@ -613,12 +616,32 @@ export function createRenderer(canvas) {
     ctx.lineCap = 'butt';
   }
 
-  function drawBench(bench, now, faces) {
+  // The spots as drawn: each slid part way toward where it stands, and one being dragged held up
+  // under the pointer, last so it is drawn over the others.
+  function shownSpots(bench, dt) {
+    const { spots, dragged } = bench;
+    const ease = Math.min(1, dt * 14);
+    const shown = spots.map((spot) => {
+      const id = spot.member.id;
+      if (dragged?.member === spot.member) {
+        shownX.set(id, dragged.x);
+        return { ...spot, x: dragged.x, y: spot.y - spot.r * 0.3 };
+      }
+      const from = Number.isFinite(shownX.get(id)) ? shownX.get(id) : spot.x;
+      const x = from + (spot.x - from) * ease;
+      shownX.set(id, x);
+      return { ...spot, x };
+    });
+    return [...shown.filter((s) => s.member !== dragged?.member), ...shown.filter((s) => s.member === dragged?.member)];
+  }
+
+  function drawBench(bench, now, dt, faces) {
     if (!bench) return;
     if (bench.loading) drawLoadingDots(board.width / 2, board.dropY, now);
     // The picked ones dim the rest only while they wait together; once they drop, the rest cheer.
     const anyPicked = bench.spots.some((s) => !bench.away.has(s.member.id) && bench.isSelected(s.member));
-    for (const spot of bench.spots) {
+    const spots = shownSpots(bench, dt);
+    for (const spot of spots) {
       if (bench.away.has(spot.member.id)) continue;
       const picked = bench.isSelected(spot.member);
       const ball = benchBall(spot, now, picked);
@@ -656,7 +679,7 @@ export function createRenderer(canvas) {
       ctx.fillText(spot.member.name, spot.x, spot.y + spot.r + 16);
     }
     for (const said of bench.speeches) {
-      const spot = bench.spots.find((s) => s.member === said.member);
+      const spot = spots.find((s) => s.member === said.member);
       if (spot) drawBubble(said.line, spot, now - said.at, said.life, bench.bounds, said.member.color);
     }
   }
@@ -747,7 +770,7 @@ export function createRenderer(canvas) {
     ground.draw(ctx, { theme, width, height, dpr, now, cam, board });
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - cam.x * s), dpr * (height / 2 - cam.y * s));
     drawBoard(board, slotMenus, winners, world, now, span);
-    drawBench(bench, now, faces);
+    drawBench(bench, now, dt, faces);
     // A member who jumped in from the ledge is drawn easing over from where they stood.
     const lifted = (b, fn) => {
       const lift = liftOf?.(b, now);
