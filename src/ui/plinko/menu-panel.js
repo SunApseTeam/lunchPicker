@@ -2,32 +2,44 @@ import { menuIcon } from '../../domain/icon.js';
 import { searchMenus } from '../../domain/search.js';
 import { $, escapeHtml } from '../shared/dom.js';
 
-// A checked place can take more than one slot when more people want it: + adds one, − takes
-// one back. Full means the board has no room for another slot.
-function slotStepper(m, slots, full) {
-  const name = escapeHtml(m.name);
-  return `<span class="slots">
-    <button data-action="fewer" data-id="${m.id}" ${slots > 1 ? '' : 'disabled'} title="칸 하나 빼기" aria-label="${name} 칸 하나 빼기">−</button>
-    <b>칸 ${slots}</b>
-    <button data-action="more" data-id="${m.id}" ${full ? 'disabled' : ''} title="원하는 사람이 더 있으면 칸 하나 더" aria-label="${name} 칸 하나 더">+</button>
-  </span>`;
+// Little faces for the members who voted: their photo, or their initial in their colour.
+export function faceChips(voters, faceUrl) {
+  return voters
+    .map(({ member, count }) => {
+      const url = faceUrl(member);
+      const face = url ? `<img src="${escapeHtml(url)}" alt="">` : `<i style="--c:${member.color}">${escapeHtml(member.name.slice(0, 1))}</i>`;
+      return `<span class="face" title="${escapeHtml(member.name)}${count > 1 ? ` 공 ${count}개` : ''}">${face}${count > 1 ? `<b>${count}</b>` : ''}</span>`;
+    })
+    .join('');
 }
 
-// The place list in the sidebar: today's candidate checkboxes with how many slots each takes,
-// inline rename, tags, hide/unhide and the add form, filtered by the search box. It owns only
-// the rename and search state; everything else comes from main.
-export function createMenuPanel({ onToggle, onSlots, onRename, onHide, onUnhide, onAdd, onIcon, onTags }) {
+// The sidebar: today's votes at the top, then the place list with inline rename, tags,
+// hide/unhide and the add form, filtered by the search box. A place someone voted for shows
+// their faces. It owns only the rename and search state; everything else comes from main.
+// tally: the voted menus as from votes.tally().
+export function createMenuPanel({ onRename, onHide, onUnhide, onAdd, onIcon, onTags }) {
   let editingId = null;
   let query = '';
-  let last = { menus: [], picks: new Map(), full: false };
+  let last = { menus: [], tally: [], faceUrl: () => null };
 
-  function render(menus = last.menus, picks = last.picks, full = last.full) {
-    last = { menus, picks, full };
+  function renderVotes() {
+    const { menus, tally, faceUrl } = last;
+    const byId = new Map(menus.map((m) => [m.id, m]));
+    const rows = tally.filter((t) => byId.has(t.menuId));
+    $('#vote-summary').innerHTML = rows.length
+      ? rows.map((t) => `<li data-id="${t.menuId}"><span class="ico">${menuIcon(byId.get(t.menuId))}</span><span class="nm">${escapeHtml(byId.get(t.menuId).name)}</span><span class="faces">${faceChips(t.voters, faceUrl)}</span><b>공 ${t.balls}</b></li>`).join('')
+      : '<li class="empty">보드 위 팀원 얼굴을 누르거나 1~9 키를 눌러 메뉴를 골라 주세요. 얼굴을 아래 가게로 끌어다 놓아도 돼요.</li>';
+  }
+
+  function render(menus = last.menus, tally = last.tally, faceUrl = last.faceUrl) {
+    last = { menus, tally, faceUrl };
+    renderVotes();
+    const voted = new Map(tally.map((t) => [t.menuId, t]));
     const visible = searchMenus(menus.filter((m) => !m.hidden), query);
     const hidden = searchMenus(menus.filter((m) => m.hidden), query);
     $('#menu-list').innerHTML = visible
       .map((m) => {
-        const checked = picks.has(m.id) ? 'checked' : '';
+        const votes = voted.get(m.id);
         const name =
           editingId === m.id
             ? `<input class="rename" data-id="${m.id}" value="${escapeHtml(m.name)}" maxlength="20" aria-label="가게 이름 수정">`
@@ -35,10 +47,9 @@ export function createMenuPanel({ onToggle, onSlots, onRename, onHide, onUnhide,
         const tags = m.tags.length
           ? `<button class="row-tags" data-action="tags" data-id="${m.id}" title="태그 편집">${m.tags.map((t) => `<span>#${escapeHtml(t)}</span>`).join('')}</button>`
           : '';
-        return `<li class="${checked ? '' : 'off'}">
-        <label class="check"><input type="checkbox" data-action="toggle" data-id="${m.id}" ${checked} aria-label="${escapeHtml(m.name)} 오늘 후보"><span></span></label>
+        return `<li data-id="${m.id}"${votes ? ' class="voted"' : ''}>
         <button class="icon-btn" data-action="icon" data-id="${m.id}" title="아이콘 바꾸기" aria-label="${escapeHtml(m.name)} 아이콘 바꾸기">${menuIcon(m)}</button>
-        <div class="info">${name}<div class="meta">${tags}${checked ? slotStepper(m, picks.get(m.id), full) : ''}</div></div>
+        <div class="info">${name}<div class="meta">${tags}${votes ? `<span class="faces">${faceChips(votes.voters, faceUrl)}</span>` : ''}</div></div>
         <button class="tag-btn" data-action="tags" data-id="${m.id}" title="태그 달기" aria-label="${escapeHtml(m.name)} 태그 편집">#</button>
         <button class="ghost" data-action="hide" data-id="${m.id}" title="숨기기">숨김</button>
       </li>`;
@@ -77,15 +88,7 @@ export function createMenuPanel({ onToggle, onSlots, onRename, onHide, onUnhide,
       onIcon(last.menus.find((m) => m.id === target.dataset.id));
     } else if (target.dataset.action === 'tags') {
       onTags(last.menus.find((m) => m.id === target.dataset.id));
-    } else if (target.dataset.action === 'more') {
-      onSlots(target.dataset.id, 1);
-    } else if (target.dataset.action === 'fewer') {
-      onSlots(target.dataset.id, -1);
     }
-  });
-
-  $('#menu-list').addEventListener('change', (e) => {
-    if (e.target.dataset.action === 'toggle') onToggle(e.target.dataset.id, e.target.checked);
   });
 
   $('#menu-list').addEventListener('keydown', (e) => {

@@ -55,22 +55,19 @@ test('the team comes from the store, skipping inactive rows, and an empty table 
   assert.equal((await lunch([]).listMembers()).length, TEAM.length);
 });
 
-test('when the whole team drops, only the picked land in places; the rest never claim one', () => {
+test('when the whole team votes, every ball, at its member’s size and bounce, takes a slot of its own', () => {
   const rng = mulberry32(21);
-  for (let round = 0; round < 12; round++) {
-    const n = 3 + (round % 4);
-    const k = 1 + (round % Math.min(3, n - 1));
+  for (let round = 0; round < 8; round++) {
+    const n = TEAM.length;
+    const k = 1 + (round % 3);
     const board = createBoard(equalWidths(n), DEFAULT_SETTINGS.size, randomBumpers(rng, boardWidth(n)));
-    const picked = new Set([...TEAM.keys()].sort(() => rng() - 0.5).slice(0, k));
-    const step = Math.max(board.width / TEAM.length, 130);
-    const left = board.width / 2 - (step * TEAM.length) / 2;
-    const players = TEAM.map((m, i) => ({ physics: memberPhysics(DEFAULT_SETTINGS, m), x: left + step * (i + 0.5), counts: picked.has(i) }));
-    const r = createRound(board, players, rng);
+    const wins = [...Array(n).keys()].sort(() => rng() - 0.5).slice(0, k).sort((a, b) => a - b);
+    const step = board.width / n;
+    const players = TEAM.map((m, i) => ({ physics: memberPhysics(DEFAULT_SETTINGS, m), x: step * (i + 0.5) }));
+    const r = createRound(board, players, rng, wins);
     for (let i = 0; i < 90 / DT && !r.done; i++) stepRound(r);
-    assert.ok(r.done, `round ${round} (${k} of ${n}) finished`);
-    r.winners.forEach((slot, i) => assert.equal(slot === null, !picked.has(i), `player ${i} ${picked.has(i) ? 'counts' : 'does not count'}`));
-    const landed = r.winners.filter((w) => w !== null);
-    assert.equal(new Set(landed).size, k, `distinct places: ${landed}`);
-    for (const ball of r.owners.values()) assert.ok(picked.has(ball.player), 'only a picked member holds a place');
+    assert.ok(r.done, `round ${round} (${k} winning of ${n}) finished`);
+    assert.deepEqual(r.winners.map((w) => w.slot), wins);
+    assert.equal(new Set(r.winners.map((w) => w.player)).size, k, 'a different ball in each winning slot');
   }
 });

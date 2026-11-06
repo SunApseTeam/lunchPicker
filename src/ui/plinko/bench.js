@@ -1,8 +1,7 @@
-// The team waiting on the drop line. Clicking a member toggles them in or out of the next drop;
-// the ones picked fall from where they stand. Their order is reshuffled every round, so where
-// someone stands gives them no edge, and before a drop a member can be dragged to another place
-// in the line. Waiting members chatter, each on their own clock, and the
-// falling ones call out what happens to them.
+// The team waiting on the drop line. The members who voted fall from where they stand, a ball per
+// vote. Their order is reshuffled every round, so where someone stands gives them no edge, and
+// before a drop a member can be dragged to another place in the line. Waiting members chatter,
+// each on their own clock, and the falling ones call out what happens to them.
 const GAP = 18;
 // How long a bubble stays up, by situation. A win line stays until the next round.
 const LIFE = { pick: 1.8, wait: 2.2, drop: 1.4, bounce: 1.1, bump: 1.1, win: Infinity, trigger: 1.8 };
@@ -30,7 +29,6 @@ export function createBench(team, rng = Math.random) {
   const pause = () => PAUSE[0] + rng() * (PAUSE[1] - PAUSE[0]);
 
   let order = shuffle(team);
-  const selected = new Set();
   // What each member is saying: member id -> { member, line, at, life, when }.
   const said = new Map();
   // When each waiting member next wants to talk. Staggered from the start.
@@ -70,24 +68,15 @@ export function createBench(team, rng = Math.random) {
     order = rest;
   }
 
-  function unpick(id) {
-    selected.delete(id);
-    if (said.get(id)?.when === 'pick') said.delete(id);
-  }
-
-  // At most `max` picks, kept newest last: past the limit, the latest earlier pick gives up
-  // their place to the new one. Picked, a member answers at once; unpicked, the line drops.
-  function toggle(member, now, max = Infinity) {
-    if (selected.has(member.id)) return unpick(member.id);
-    trim(max - 1);
-    selected.add(member.id);
+  // A member who has just voted answers at once.
+  function cheer(member, now) {
     say(member, 'pick', now);
     nextAt.set(member.id, now + LIFE.pick + pause());
   }
 
-  // Drops the latest picks until no more than `max` remain.
-  function trim(max) {
-    while (selected.size > Math.max(0, max)) unpick([...selected].at(-1));
+  // Taking a vote back takes back the line that came with it.
+  function hush(member) {
+    if (said.get(member.id)?.when === 'pick') said.delete(member.id);
   }
 
   const live = (s, now) => s && now - s.at < s.life;
@@ -145,8 +134,8 @@ export function createBench(team, rng = Math.random) {
     hit,
     placeAt,
     move,
-    toggle,
-    trim,
+    cheer,
+    hush,
     chatter,
     shout,
     shoutOf,
@@ -155,9 +144,7 @@ export function createBench(team, rng = Math.random) {
       said.clear();
       for (const m of team) nextAt.set(m.id, now + rng() * 2);
     },
-    isSelected: (member) => selected.has(member.id),
-    chosen: () => order.filter((m) => selected.has(m.id)),
-    count: () => selected.size,
+    order: () => order,
     byKey: (n) => order[n - 1] ?? null,
     reshuffle() {
       order = shuffle(order);

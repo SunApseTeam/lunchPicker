@@ -15,10 +15,15 @@ const MAX_SLOT_BOUNCES = 2;
 const MAX_SETTLED_BOUNCES = 8;
 // A ball coming down onto one resting in a slot shoves it the other way: up to this speed, in
 // proportion to how fast the newcomer was falling (from SHOVE_FROM up). Hard enough, it knocks
-// the resting ball over the divider and out of its slot.
+// the resting ball over the divider and out of its slot. Only a ball coming down from the pegs
+// shoves: one already flung off a ball lands softly, or knock-outs would set off one another.
 const SHOVE = 600;
 const SHOVE_FROM = 250;
 const SHOVE_FULL = 1100;
+// A ball flung off a settled one is aimed at the nearest free slot, however far: its sideways
+// speed is what carries it there in about this long in the air, within HOP_SPEED.
+const HOP_FLIGHT = 0.7;
+const HOP_SPEED = [430, 950];
 // The spring under the slots: how hard it throws every ball in them straight back up. 1250 lifts
 // a ball about 330, past the bottom peg row 250 above the floor, so it is thrown back among the
 // pegs and bumpers and lands all over again.
@@ -38,9 +43,14 @@ const PEG_RESTITUTION = 0.7;
 const FLOOR_RESTITUTION = 0.7;
 const FLOOR_MIN_SPEED = 150;
 const DIVIDER_PER_RADIUS = 0.55;
+// Each slot's floor is a shallow bowl, this deep at the dividers in proportion to the ball: a ball
+// that comes to rest in a slot rolls to its middle and sits there, clear of the dividers.
+const CUP_PER_RADIUS = 0.3;
 // A lid tilts toward the nearest open slot: a ball resting on it slides off at this sideways
 // acceleration instead of rolling to and fro between the divider tops.
 const LID_TILT = 1400;
+const HOMING = 1200;
+const HOMING_END = 3000;
 // The floor grips a ball; a lid is slick, or the grip would hold a ball against the tilt.
 const FLOOR_FRICTION = 0.35;
 const LID_FRICTION = 0.02;
@@ -226,6 +236,7 @@ export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers 
     // Lids sit just above the divider caps, so a ball sliding along one does not snag on a cap.
     lidY: dividerTop - g.dividerHalfWidth - 2,
     floorY,
+    cupDepth: radius * CUP_PER_RADIUS,
     height: floorY + 90,
     slotEdges,
     dividers,
@@ -248,6 +259,27 @@ export function springSlots(world, also = []) {
   return thrown;
 }
 
+// The slot floor under x: lowest in a slot's middle and rising toward its dividers. The trigger
+// slot's floor is its button, flat. slope is dy/dx there.
+export function floorAt(board, x) {
+  const { cup, u } = bowl(board, x);
+  return board.floorY - cup * u * u;
+}
+
+function bowl(board, x) {
+  const i = slotAt(board, x);
+  if (i === board.triggerSlot) return { cup: 0, u: 0, half: 1 };
+  const x0 = board.slotEdges[i];
+  const x1 = board.slotEdges[i + 1];
+  const half = (x1 - x0) / 2;
+  return { cup: board.cupDepth, u: Math.min(1, Math.max(-1, (x - x0 - half) / half)), half };
+}
+
+function slopeAt(board, x) {
+  const { cup, u, half } = bowl(board, x);
+  return (-2 * cup * u) / half;
+}
+
 export function slotAt(board, x) {
   const e = board.slotEdges;
   for (let i = 0; i < e.length - 1; i++) if (x < e[i + 1]) return i;
@@ -256,7 +288,7 @@ export function slotAt(board, x) {
 
 export function createWorld(board, rng, physics = physicsFrom(DEFAULT_SETTINGS)) {
   // closed: empty slots with a lid over them. The round decides which.
-  return { board, rng, physics, time: 0, balls: [], nextId: 1, touching: new Set(), closed: new Set() };
+  return { board, rng, physics, time: 0, balls: [], nextId: 1, touching: new Set(), closed: new Set(), endgame: false };
 }
 
 // A closed slot has a lid just above the divider tops: a ball coming down onto it lands there as
@@ -267,23 +299,35 @@ function floorUnder(world, b) {
   return b.cy < board.lidY && world.closed.has(slotAt(board, b.cx)) ? board.lidY : board.floorY;
 }
 
-// Which way (-1 or 1) the nearest free slot is from x: one with no lid and no settled ball in
-// it. 0 when there is none.
-function towardFree(world, x) {
+// The middle of the nearest free slot to x: one with no lid and no other ball down in it (a ball
+// knocked about in its slot still has it). null when there is none.
+function nearestFree(world, x, self = null) {
   const e = world.board.slotEdges;
-  const taken = new Set(world.balls.filter((b) => b.settled).map((b) => b.slot));
+  const taken = new Set(world.balls.filter((b) => b !== self && b.zone !== null && !b.stacked).map((b) => b.zone));
   let best = null;
   for (let i = 0; i < e.length - 1; i++) {
     if (world.closed.has(i) || taken.has(i)) continue;
     const mid = (e[i] + e[i + 1]) / 2;
     if (best === null || Math.abs(mid - x) < Math.abs(best - x)) best = mid;
   }
+  return best;
+}
+
+// Which way (-1 or 1) the nearest free slot is from x, or 0 when there is none.
+function towardFree(world, x, self = null) {
+  const best = nearestFree(world, x, self);
   return best === null ? 0 : Math.sign(best - x);
 }
 
-// Sideways acceleration on a ball resting on a lid, as if the lid sloped toward a free slot.
-function lidTilt(world, b) {
-  return b.onLid ? towardFree(world, b.cx) * LID_TILT : 0;
+// Sideways acceleration on a ball resting on a lid, as if the lid sloped toward a free slot,
+// and on a ball flung off another one, below the pegs and not yet at rest, drawing it on toward
+// the nearest free slot instead of onto the next ball. In the endgame (world.endgame, set by the
+// round) every ball below the pegs not yet at rest is drawn in, harder.
+function drift(world, b) {
+  if (b.onLid) return towardFree(world, b.cx) * LID_TILT;
+  if (b.settled || b.cy <= world.board.pegBottom) return 0;
+  if (world.endgame) return towardFree(world, b.cx, b) * HOMING_END;
+  return b.slotBounces > 0 ? towardFree(world, b.cx, b) * HOMING : 0;
 }
 
 // Each ball carries its own physics (size, softness, bounce), so team members can differ.
@@ -556,8 +600,20 @@ function collideStatic(world, b) {
       p.x = board.width - POINT_R;
       p.py += (p.y - p.py) * 0.3;
     }
-    if (p.y > floor - POINT_R) {
-      p.y = floor - POINT_R;
+    if (floor === board.lidY) {
+      if (p.y > floor - POINT_R) {
+        p.y = floor - POINT_R;
+        p.px += (p.x - p.px) * friction;
+      }
+      continue;
+    }
+    // Out along the bowl's normal, so a ball on its slope is eased toward the middle.
+    const depth = p.y - (floorAt(board, p.x) - POINT_R);
+    if (depth > 0) {
+      const s = slopeAt(board, p.x);
+      const k = depth / (1 + s * s);
+      p.x += s * k;
+      p.y -= k;
       p.px += (p.x - p.px) * friction;
     }
   }
@@ -657,12 +713,15 @@ function slotBounces(world, emit) {
     const base = balls.find((b) => b !== a && b.zone !== null && !b.stacked && b.cy > a.cy && Math.hypot(b.vx, b.vy) < 80 && touches(a, b));
     if (!base || a.slotBounces >= (base.settled ? MAX_SETTLED_BOUNCES : MAX_SLOT_BOUNCES)) continue;
     const dx = a.cx - base.cx;
-    let side = (base.settled && towardFree(world, a.cx)) || (Math.abs(dx) > 6 ? Math.sign(dx) : rng() < 0.5 ? -1 : 1);
+    const free = base.settled ? nearestFree(world, a.cx, a) : null;
+    let side = (free !== null && Math.sign(free - a.cx)) || (Math.abs(dx) > 6 ? Math.sign(dx) : rng() < 0.5 ? -1 : 1);
     const hop = board.width / (board.slotEdges.length - 1);
     if (a.cx + side * hop < 0 || a.cx + side * hop > board.width) side = -side;
     const fall = a.inVy ?? a.vy;
-    setVelocity(a, side * (430 + rng() * 120), -(760 + rng() * 120));
-    const shove = SHOVE * Math.min(1, Math.max(0, (fall - SHOVE_FROM) / (SHOVE_FULL - SHOVE_FROM)));
+    const reach = free === null ? 0 : Math.abs(free - a.cx) / HOP_FLIGHT;
+    const speed = Math.min(HOP_SPEED[1], Math.max(HOP_SPEED[0], reach)) * (0.95 + rng() * 0.1) + (reach ? 0 : rng() * 120);
+    setVelocity(a, side * speed, -(760 + rng() * 120));
+    const shove = a.slotBounces > 0 || world.endgame ? 0 : SHOVE * Math.min(1, Math.max(0, (fall - SHOVE_FROM) / (SHOVE_FULL - SHOVE_FROM)));
     if (shove > 0) setVelocity(base, -side * shove * 0.6, -shove);
     else for (const p of base.pts) if (p.y < base.cy) p.py -= 5;
     a.bounceAt = world.time;
@@ -751,7 +810,7 @@ function emitContacts(world, emit, before) {
       }
     }
     const floor = floorUnder(world, b);
-    const onFloor = b.bottom >= floor - POINT_R - 0.5;
+    const onFloor = floor === board.lidY ? b.bottom >= floor - POINT_R - 0.5 : b.pts.some((p) => p.y >= floorAt(board, p.x) - POINT_R - 0.5);
     b.onLid = onFloor && floor === board.lidY;
     if (onFloor && !b.onFloor && b.inVy > FLOOR_MIN_SPEED) {
       bounceOffFloor(b);
@@ -781,7 +840,7 @@ export function stepWorld(world, emit = () => {}) {
       my += p.y - p.py;
     }
     const inSlot = b.zone !== null && world.time - b.bounceAt > 0.35;
-    const tilt = lidTilt(world, b) * DT * DT;
+    const tilt = drift(world, b) * DT * DT;
     const drag = inSlot ? SLOT_DRAG : AIR_DRAG;
     const damping = inSlot ? b.phys.damping * SLOT_WOBBLE_DAMPING : b.phys.damping;
     mx = (mx / POINTS) * drag;
