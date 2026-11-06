@@ -124,6 +124,12 @@ export function createAudio() {
       if (muted || !ctx) return;
       voice('sine', 160, 0.25, 0.18, ctx.currentTime, (x / boardWidth) * 1.6 - 0.8, 90);
     },
+    // The slots mixed up: a quick rattle of wooden clacks.
+    shuffle() {
+      if (muted || !ctx) return;
+      const now = ctx.currentTime;
+      for (let i = 0; i < 5; i++) voice('triangle', 300 + Math.random() * 500, 0.12, 0.06, now + i * 0.06, (Math.random() - 0.5) * 1.2);
+    },
     redrop() {
       if (muted || !ctx) return;
       voice('sawtooth', 900, 0.08, 0.35, ctx.currentTime, 0, 140);

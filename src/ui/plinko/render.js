@@ -110,6 +110,20 @@ export function createRenderer(canvas) {
     }
   }
 
+  // Slots sliding from where they stood to where a shuffle put them: fromX[i] is where slot i's
+  // centre was before.
+  const SLIDE_TIME = 0.45;
+  let slide = null;
+  function slideSlots(board, fromX, now) {
+    slide = { board, fromX, at: now };
+  }
+  function slideShift(board, i, now) {
+    if (!slide || slide.board !== board || now - slide.at > SLIDE_TIME) return 0;
+    const k = (now - slide.at) / SLIDE_TIME;
+    const ease = 1 - (1 - k) ** 3;
+    return (slide.fromX[i] - (board.slotEdges[i] + board.slotEdges[i + 1]) / 2) * (1 - ease);
+  }
+
   function celebrate(board, slots) {
     for (const slot of slots) {
       const x = (board.slotEdges[slot] + board.slotEdges[slot + 1]) / 2;
@@ -209,8 +223,9 @@ export function createRenderer(canvas) {
 
     // Each slot is a mat in its colour, with the place's name on a little cream sign.
     for (let i = 0; i < slotMenus.length; i++) {
-      const x0 = board.slotEdges[i];
-      const x1 = board.slotEdges[i + 1];
+      const shift = slideShift(board, i, now);
+      const x0 = board.slotEdges[i] + shift;
+      const x1 = board.slotEdges[i + 1] + shift;
       if (slotMenus[i].trigger) {
         fx.drawTriggerSlot(board, now, x0, x1);
         continue;
@@ -829,5 +844,5 @@ export function createRenderer(canvas) {
     theme = themeById(id);
   }
 
-  return { resize, draw, onEvent, celebrate, toBoard, poke, jiggle, setTheme, visible: (ball) => onScreen(camera, ball, width, height) };
+  return { resize, draw, onEvent, celebrate, slideSlots, toBoard, poke, jiggle, setTheme, visible: (ball) => onScreen(camera, ball, width, height) };
 }

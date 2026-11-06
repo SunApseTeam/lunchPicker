@@ -183,6 +183,15 @@
     }
     #drop:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 2px 0 var(--yellow-deep); }
     #drop:disabled { background: var(--line); color: var(--muted); box-shadow: none; cursor: default; }
+    #shuffle {
+      font: 700 15px/1 "IBM Plex Sans KR", sans-serif;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--ink);
+      background: var(--panel);
+    }
+    #shuffle:disabled { color: var(--muted); opacity: .6; cursor: default; }
     #drop-hint { min-height: 1.4em; margin: 0; font-size: 13px; color: var(--accent-text); text-align: center; }
     .foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 12px; }
     kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-family: inherit; }
@@ -419,6 +428,7 @@
         <span id="pick-count">0명</span>
       </div>
       <p id="pick-names"></p>
+      <button id="shuffle">칸 섞기 <kbd>S</kbd></button>
       <button id="drop">구슬 떨어뜨리기</button>
       <p id="drop-hint" role="status"></p>
       <div class="foot">
