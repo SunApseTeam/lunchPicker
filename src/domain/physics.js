@@ -101,9 +101,9 @@ export function minSlotWidth(radius) {
 
 // The trigger slot: one extra slot, among the places' slots, with a button for a floor. It is
 // exactly as wide as the biggest ball, narrower than theirs. With the whole team dropping and any
-// ball reaching its floor pressing it, that set it off in 100% (2 places), 88% (4) and 93% (6) of
-// 40 rounds each. Narrower slots press less (80 wide: 63%, 45%, 55%), but a big ball can then lodge
-// across the mouth and the round never ends.
+// ball reaching its mouth pressing it, that set it off in 100% (2 places), 88% (4) and 95% (6) of
+// 40 rounds each. Narrower slots press less, but a big ball can then lodge across the mouth and
+// the round never ends.
 export function triggerWidth(radius) {
   return 2 * radius;
 }
@@ -232,10 +232,11 @@ export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers 
 }
 
 // The spring under every slot throws each ball in them back up, a little sideways, so even a
-// ball that had settled goes round again. Returns the balls thrown.
-export function springSlots(world) {
+// ball that had settled goes round again, along with any balls in `also`. Returns the balls
+// thrown.
+export function springSlots(world, also = []) {
   const { rng } = world;
-  const thrown = world.balls.filter((b) => b.zone !== null);
+  const thrown = world.balls.filter((b) => b.zone !== null || also.includes(b));
   for (const b of thrown) {
     setVelocity(b, (rng() * 2 - 1) * 260, -(SPRING_SPEED + rng() * 200));
     // In the air at once: no slot drag, and its slot bounces start afresh.
