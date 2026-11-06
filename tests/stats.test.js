@@ -30,6 +30,27 @@ const visits = [
 ];
 const stats = computeStats(menus, visits, '2026-10-30');
 
+test('the winners rank members by how many records name them, with where their picks went most', () => {
+  const s = computeStats(
+    menus,
+    [
+      visit('a', '2026-10-01', { memberId: 'kim' }),
+      visit('b', '2026-10-02', { memberId: 'kim' }),
+      visit('b', '2026-10-05', { memberId: 'kim' }),
+      visit('a', '2026-10-06', { memberId: 'lee' }),
+      visit('c', '2026-10-07', { memberId: 'lee', canceled: true }),
+      visit('c', '2026-10-08', { memberId: 'park' }),
+      visit('c', '2026-10-09'),
+    ],
+    '2026-10-30',
+  );
+  assert.deepEqual(
+    s.winners.map((w) => [w.memberId, w.count, w.top?.name]),
+    [['kim', 3, '돈까스'], ['park', 1, '초밥'], ['lee', 1, '국밥']],
+    'canceled and unnamed records count for nobody; a tie goes to the latest winner',
+  );
+});
+
 test('weekday names follow the calendar', () => {
   assert.equal(weekdayOf('2026-10-26'), '월');
   assert.equal(weekdayOf('2026-11-01'), '일');

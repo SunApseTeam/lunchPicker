@@ -12,6 +12,7 @@ import {
   renderStale,
   renderTags,
   renderTimeline,
+  renderWinners,
   shortDate,
 } from './views.js';
 
@@ -42,6 +43,7 @@ async function render() {
     ? `<b>${stats.totalDays}</b>일 동안 <b>${stats.totalVisits}</b>번 기록했어요`
     : '아직 기록이 없어요';
   $('#ranking').innerHTML = renderRanking(stats.ranking);
+  $('#winners').innerHTML = renderWinners(stats.winners, { members, photoOf });
   $('#stale').innerHTML = hasVisits ? renderStale(stats.stale) : EMPTY;
   $('#weekdays').innerHTML = hasVisits ? renderColumns(stats.weekdays, (r) => `${r.label}요일 ${r.count}번${topNote(r)}`) : EMPTY;
   $('#months').innerHTML = hasVisits ? renderColumns(stats.months, (r) => `${r.label} ${r.count}번${topNote(r)}`) : EMPTY;

@@ -134,7 +134,7 @@ export function createAudio() {
       if (muted || !ctx) return;
       voice('sawtooth', 900, 0.08, 0.35, ctx.currentTime, 0, 140);
     },
-    // A member popped by a glowing one: a sharp crack over a deep boom.
+    // A ball knocked out of a winning slot: a sharp crack over a deep boom.
     pop(x, boardWidth) {
       if (muted || !ctx) return;
       const now = ctx.currentTime;

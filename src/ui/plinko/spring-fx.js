@@ -20,7 +20,6 @@ const OPEN_TIME = 0.35;
 const COVER_SHUT = [0.3, 0.5];
 // How far the glass cover swings up on its hinge when open.
 const COVER_SWING = 1.9;
-const POP_TIME = 0.7;
 
 export function createSpringFx(ctx) {
   const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -28,7 +27,6 @@ export function createSpringFx(ctx) {
   // own, so a fresh board starts covered and unpressed.
   const openedAt = new WeakMap();
   const pressedAt = new WeakMap();
-  const pops = [];
   let shake = { at: -10, power: 0 };
   let bannerAt = -10;
 
@@ -38,19 +36,13 @@ export function createSpringFx(ctx) {
 
   function press(board, now) {
     pressedAt.set(board, now);
-    jolt(now, 26);
+    jolt(now, 34);
     bannerAt = now;
   }
 
   function jolt(now, power) {
     if (now - shake.at < 0.3 && shake.power > power) return;
     shake = { at: now, power };
-  }
-
-  // A burst where a member was popped: a ring, a flash and "펑!".
-  function pop(x, y, now) {
-    pops.push({ x, y, at: now });
-    jolt(now, 12);
   }
 
   // How far the view is jolted right now, in screen pixels.
@@ -354,48 +346,6 @@ export function createSpringFx(ctx) {
     twinkles(b.cx, b.cy, b.R * 1.25, now * 1.4 + b.id, 7, '#fff3b0');
   }
 
-  // Rings, flashes and "펑!" where members were popped.
-  function drawPops(now) {
-    for (let i = pops.length - 1; i >= 0; i--) {
-      const { x, y, at } = pops[i];
-      const t = now - at;
-      if (t > POP_TIME) {
-        pops.splice(i, 1);
-        continue;
-      }
-      const k = t / POP_TIME;
-      if (t < 0.1) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.95 * (1 - t / 0.1)})`;
-        ctx.beginPath();
-        ctx.arc(x, y, 90, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.strokeStyle = `rgba(255, 196, 60, ${1 - k})`;
-      ctx.lineWidth = 14 * (1 - k) + 2;
-      ctx.beginPath();
-      ctx.arc(x, y, 40 + 170 * k, 0, Math.PI * 2);
-      ctx.stroke();
-      const size = 54 * (t < 0.12 ? 0.5 + (t / 0.12) * 0.7 : 1.2 - 0.2 * Math.min(1, (t - 0.12) / 0.2));
-      ctx.save();
-      ctx.globalAlpha = k > 0.7 ? (1 - k) / 0.3 : 1;
-      ctx.translate(x, y - 20 - 30 * k);
-      ctx.rotate(-0.12);
-      ctx.font = `${Math.round(size)}px "Black Han Sans", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.lineJoin = 'round';
-      ctx.lineWidth = 9;
-      ctx.strokeStyle = '#ffffff';
-      ctx.strokeText('펑!', 0, 0);
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = INK;
-      ctx.strokeText('펑!', 0, 0);
-      ctx.fillStyle = '#ff7a1a';
-      ctx.fillText('펑!', 0, 0);
-      ctx.restore();
-    }
-  }
-
   // "혼란!" across the screen, popping in and fading out.
   function drawBanner(width, height, now) {
     const t = now - bannerAt;
@@ -423,5 +373,5 @@ export function createSpringFx(ctx) {
     ctx.restore();
   }
 
-  return { open, press, pop, shakeOffset, drawTriggerSlot, drawSprings, drawCharge, drawChargeSparkles, drawPops, drawBanner };
+  return { open, press, shakeOffset, drawTriggerSlot, drawSprings, drawCharge, drawChargeSparkles, drawBanner };
 }
