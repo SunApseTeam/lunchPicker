@@ -192,6 +192,21 @@ test('every round can get its own bumper layout, and none of them traps a ball',
   assert.ok(layouts.size > 25, `${layouts.size} different layouts`);
 });
 
+test('a longer drop has more peg rows and bumpers, the slots further down, and still finishes', () => {
+  for (const rows of [8, 12, 16]) {
+    const rng = mulberry32(rows);
+    const board = createBoard(slotWidthsWithTrigger(5, physics.radius, 2), physics.radius, randomBumpers(rng, boardWidth(6), rows), 2, rows);
+    const ys = new Set(board.pegs.filter((p) => p.kind !== 'wall').map((p) => p.y));
+    assert.equal(ys.size, rows, `${rows} rows of pegs`);
+    assert.equal(board.floorY, board.pegTop + (rows - 1) * board.rowGap + board.slotRoom);
+    const bumpers = board.pegs.filter((p) => p.kind === 'bumper').length;
+    assert.ok(bumpers >= Math.round((9 * rows) / 8) - 1, `${rows} rows: ${bumpers} bumpers`);
+    const round = createRound(board, players(5), rng, [0, 4]);
+    for (let i = 0; i < 90 / DT && !round.done; i++) stepRound(round);
+    assert.ok(round.done, `${rows} rows: finished`);
+  }
+});
+
 test('even the narrowest boards get four bumpers', () => {
   for (const slots of [2, 3]) {
     for (let seed = 1; seed <= 10; seed++) assert.equal(randomBumpers(mulberry32(seed), boardWidth(slots)).length, 4, `${slots} slots`);

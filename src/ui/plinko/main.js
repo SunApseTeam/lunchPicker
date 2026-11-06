@@ -94,12 +94,12 @@ let slotSeed = Math.random() * 2 ** 32;
 // n slots for the balls, k of them winning, with the trigger slot slipped in among them.
 function layOut(n, k) {
   const rng = mulberry32(bumperSeed);
-  const bumpers = randomBumpers(rng, boardWidth(n + 1));
+  const bumpers = randomBumpers(rng, boardWidth(n + 1), settings.rows);
   const draw = mulberry32(slotSeed);
   const at = Math.floor(draw() * (n + 1));
   const kinds = shuffle(Array.from({ length: n }, (_, i) => (k === 0 ? 'wait' : i < k ? 'win' : 'lose')), draw);
   slots = [...kinds.slice(0, at), 'trigger', ...kinds.slice(at)].map((kind) => ({ kind }));
-  board = createBoard(slotWidthsWithTrigger(n, BALL.size, at), BALL.size, bumpers, at);
+  board = createBoard(slotWidthsWithTrigger(n, BALL.size, at), BALL.size, bumpers, at, settings.rows);
 }
 layOut(2, 0);
 
@@ -496,11 +496,14 @@ const tagEditor = createTagEditor({
 });
 
 function applySettings(next) {
+  const rowsChanged = next.rows !== settings.rows;
   settings = next;
   saveSettings(settings);
   audio.setMuted(!settings.sound);
   renderer.setTheme(settings.theme);
   renderThemes();
+  // A longer or shorter drop needs a new board; one in play keeps its own until the next round.
+  if (rowsChanged) rebuildBoard();
   settingsDialog.render();
   renderControls();
 }

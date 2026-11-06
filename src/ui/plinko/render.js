@@ -857,9 +857,7 @@ export function createRenderer(canvas) {
       : { lo: 0, hi: board.width, wallTop: 0 };
     followCamera(camera, cameraTarget(board, { ...view, span: span.hi - span.lo }, balls, width, height), dt);
     const s = camera.scale;
-    // The spring jolts the whole view: ground and board move together.
-    const jolt = fx.shakeOffset(now);
-    const cam = { ...camera, x: camera.x - jolt.x / s, y: camera.y - jolt.y / s };
+    const cam = camera;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ground.draw(ctx, { theme, width, height, dpr, now, cam, board });
