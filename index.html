@@ -19,6 +19,7 @@
   <link rel="modulepreload" href="src/domain/stats.js">
   <link rel="modulepreload" href="src/domain/tag.js">
   <link rel="modulepreload" href="src/domain/team.js">
+  <link rel="modulepreload" href="src/domain/votes.js">
   <link rel="modulepreload" href="src/infrastructure/config.js">
   <link rel="modulepreload" href="src/infrastructure/demo-store.js">
   <link rel="modulepreload" href="src/infrastructure/local-store.js">
@@ -38,6 +39,7 @@
   <link rel="modulepreload" href="src/ui/plinko/settings-dialog.js">
   <link rel="modulepreload" href="src/ui/plinko/spring-fx.js">
   <link rel="modulepreload" href="src/ui/plinko/tag-editor.js">
+  <link rel="modulepreload" href="src/ui/plinko/vote-picker.js">
   <link rel="modulepreload" href="src/ui/plinko/themes/art.js">
   <link rel="modulepreload" href="src/ui/plinko/themes/beach.js">
   <link rel="modulepreload" href="src/ui/plinko/themes/index.js">
@@ -116,25 +118,95 @@
       padding: 6px 4px;
       border-bottom: 1px solid var(--line);
     }
-    #menu-list li.off .name { color: var(--muted); text-decoration: line-through; }
+    #menu-list li.voted { background: rgba(255, 201, 60, 0.13); border-radius: 10px; }
+    #menu-list li.drop-target, #vote-summary li.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: rgba(249, 98, 98, 0.08); }
+    #vote-summary { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; }
+    #vote-summary li {
+      display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 12px;
+      background: rgba(255, 201, 60, 0.2); border: 1px solid rgba(230, 170, 20, 0.55); font-weight: 700;
+    }
+    #vote-summary li.empty { background: none; border: 1px dashed var(--line); color: var(--muted); font-weight: 400; font-size: 13px; line-height: 1.5; }
+    #vote-summary .ico { font-size: 18px; }
+    #vote-summary .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #vote-summary b { font-size: 12px; color: var(--accent-text); white-space: nowrap; }
+    .faces { display: inline-flex; align-items: center; padding-left: 6px; }
+    .faces .face { position: relative; margin-left: -6px; display: block; }
+    .faces img, .faces i {
+      width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; display: block; object-fit: cover;
+      box-sizing: border-box;
+    }
+    .faces i { background: var(--c); color: #fff; font: 700 11px/20px "IBM Plex Sans KR", sans-serif; text-align: center; }
+    .faces .face b {
+      position: absolute; right: -5px; bottom: -5px; min-width: 14px; padding: 0 3px; border-radius: 8px;
+      background: var(--accent); color: #fff; font: 700 10px/14px "IBM Plex Sans KR", sans-serif; text-align: center;
+    }
+    #menu-list .meta .faces { margin-left: 4px; }
+    #vote-picker {
+      position: fixed; z-index: 7; width: 300px; max-height: min(480px, calc(100vh - 16px));
+      display: flex; flex-direction: column;
+      background: var(--surface); border: 2px solid var(--accent); border-radius: 18px;
+      box-shadow: 0 18px 50px rgba(28, 29, 38, 0.25); padding: 12px; gap: 10px;
+      animation: rise .18s ease-out;
+    }
+    #vote-picker[hidden] { display: none; }
+    @keyframes rise { from { transform: translateY(6px); opacity: 0; } }
+    #vote-picker header { display: flex; align-items: center; justify-content: space-between; }
+    #vote-who { margin: 0; font: 400 18px/1 "Black Han Sans", sans-serif; }
+    #vote-close { background: none; border: 0; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 6px; border-radius: 8px; }
+    #vote-taken { display: flex; flex-direction: column; gap: 6px; }
+    #vote-taken[hidden] { display: none; }
+    #vote-taken button {
+      display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; text-align: left;
+      background: rgba(255, 201, 60, 0.2); border: 1px solid rgba(230, 170, 20, 0.55); border-radius: 12px; font-weight: 700;
+    }
+    #vote-taken .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #vote-taken button:hover, #vote-results button:hover { filter: brightness(0.96); }
+    #vote-picker [aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+    #vote-search {
+      width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 10px;
+      border: 1px solid var(--line); background: var(--panel); font: inherit; color: var(--text);
+    }
+    #vote-search:focus { outline: 2px solid var(--mint); border-color: transparent; }
+    #vote-results { overflow: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    #vote-results button {
+      display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px; text-align: left;
+      background: none; border: 0; border-radius: 10px;
+    }
+    #vote-results button.first { background: var(--panel); }
+    #vote-results .ico { width: 24px; text-align: center; }
+    #vote-results li.none { color: var(--muted); font-size: 13px; padding: 8px; }
+    #vote-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+    #vote-foot[hidden] { display: none; }
+    #vote-foot .stepper-mini { display: flex; align-items: center; gap: 8px; flex: 1; font-weight: 700; }
+    #vote-foot .stepper-mini button { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); font-weight: 700; }
+    #vote-foot .stepper-mini button:disabled { opacity: .35; cursor: default; }
+    #vote-clear { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
+    #vote-clear:hover { color: var(--text); border-color: var(--muted); }
+    #stage-note {
+      position: absolute; left: 50%; top: 16px; transform: translateX(-50%); z-index: 4;
+      max-width: calc(100% - 32px); padding: 16px 26px; border-radius: 22px; text-align: center;
+      background: rgba(255, 255, 255, 0.97); border: 2px solid var(--accent); box-shadow: 0 16px 44px rgba(28, 29, 38, 0.18);
+      animation: pop .45s cubic-bezier(.2, 1.6, .4, 1);
+    }
+    #stage-note[hidden] { display: none; }
+    #stage-note p { margin: 0; font: 400 26px/1.2 "Black Han Sans", sans-serif; color: var(--accent-text); }
+    #stage-note small { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
+    #stage-note ul { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+    #stage-note li { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 12px; background: rgba(255, 201, 60, 0.35); font-weight: 700; }
+    #stage-note li img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+    #picked-so-far {
+      position: absolute; left: 12px; top: 12px; z-index: 3; display: flex; flex-direction: column; gap: 6px;
+      padding: 10px 12px; border-radius: 16px; background: rgba(255, 255, 255, 0.92); box-shadow: 0 6px 20px rgba(28, 29, 38, 0.14);
+      font-size: 13px;
+    }
+    #picked-so-far[hidden] { display: none; }
+    #picked-so-far strong { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+    #picked-so-far li { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+    #picked-so-far li img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
     #menu-list li.loading { justify-content: center; color: var(--muted); font-size: 13px; border: 0; padding: 18px 4px; }
     .spinner { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
-    .check { position: relative; width: 22px; height: 22px; flex: none; cursor: pointer; }
-    .check input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-    .check span {
-      position: absolute; inset: 0;
-      border: 2px solid var(--muted);
-      border-radius: 7px;
-      transition: background .15s, border-color .15s;
-    }
-    .check input:checked + span { background: var(--yellow); border-color: var(--yellow); }
-    .check input:checked + span::after {
-      content: ""; position: absolute; left: 6px; top: 2px; width: 5px; height: 10px;
-      border: solid var(--ink); border-width: 0 3px 3px 0; transform: rotate(45deg);
-    }
-    .check input:focus-visible + span { outline: 2px solid var(--mint); outline-offset: 2px; }
     button { font: inherit; color: inherit; cursor: pointer; }
     button.name {
       flex: 1; text-align: left; background: none; border: 0; padding: 4px 2px; border-radius: 6px;
@@ -168,8 +240,8 @@
       background: var(--panel); border: 1px solid var(--line); font-size: 18px; font-weight: 700;
     }
     .stepper button:disabled { opacity: .35; cursor: default; }
-    #pick-count { font: 400 26px/1 "Black Han Sans", sans-serif; color: var(--accent-text); min-width: 18px; text-align: center; }
-    #pick-names { margin: -6px 0 0; min-height: 1.3em; font-size: 13px; color: var(--muted); }
+    #want-count { font: 400 26px/1 "Black Han Sans", sans-serif; color: var(--accent-text); min-width: 18px; text-align: center; }
+    #vote-status { margin: -6px 0 0; min-height: 1.3em; font-size: 13px; color: var(--muted); }
     #drop {
       font: 400 22px/1 "Black Han Sans", sans-serif;
       letter-spacing: 1px;
@@ -365,10 +437,12 @@
     .dialog-foot button { border-radius: 12px; padding: 10px 16px; font-weight: 700; }
     #settings-reset { background: none; border: 1px solid var(--line); color: var(--muted); }
     #settings-close { background: var(--yellow); color: var(--ink); border: 0; }
-    body[data-phase="running"] #menu-list,
-    body[data-phase="running"] #add-form,
-    body[data-phase="running"] #hidden-wrap { opacity: .5; pointer-events: none; }
+    body[data-phase="running"] #menu-list, body[data-phase="between"] #menu-list,
+    body[data-phase="running"] #add-form, body[data-phase="between"] #add-form,
+    body[data-phase="running"] #hidden-wrap, body[data-phase="between"] #hidden-wrap { opacity: .5; pointer-events: none; }
     @media (max-width: 860px) {
+      #vote-picker { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 70vh; border-radius: 18px 18px 0 0; border-width: 2px 0 0; }
+      #picked-so-far { top: auto; bottom: 12px; }
       body { grid-template-columns: 1fr; grid-template-rows: 62vh auto; overflow: auto; }
       main { grid-row: 1; }
       aside { grid-row: 2; border-right: 0; border-top: 1px solid var(--line); padding: 20px 16px; overflow: visible; }
@@ -404,7 +478,9 @@
       <p class="sub">말랑한 구슬이 멈추는 곳이 오늘의 점심</p>
     </header>
     <section class="candidates">
-      <h2>오늘 후보 <span><b id="candidate-count">0</b>개</span></h2>
+      <h2>오늘 투표 <span><b id="voter-count">0</b>명</span></h2>
+      <ul id="vote-summary"></ul>
+      <h2>가게</h2>
       <label class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input id="menu-search" type="search" autocomplete="off" placeholder="가게·태그 검색 · 초성 ㅇㄷ · 줄임말 노피" aria-label="가게 검색">
@@ -424,10 +500,14 @@
     </section>
     <section class="controls">
       <div class="stepper">
-        <h2 style="margin:0">떨어질 사람</h2>
-        <span id="pick-count">0명</span>
+        <h2 style="margin:0">뽑을 메뉴</h2>
+        <span class="num">
+          <button id="want-less" aria-label="뽑을 메뉴 하나 줄이기">−</button>
+          <span id="want-count">1</span>
+          <button id="want-more" aria-label="뽑을 메뉴 하나 늘리기">+</button>
+        </span>
       </div>
-      <p id="pick-names"></p>
+      <p id="vote-status"></p>
       <button id="shuffle">칸 섞기 <kbd>S</kbd></button>
       <button id="drop">구슬 떨어뜨리기</button>
       <p id="drop-hint" role="status"></p>
@@ -441,6 +521,8 @@
     <canvas id="board" aria-label="플링코 보드"></canvas>
     <div id="theme-picker" role="group" aria-label="맵 테마"></div>
     <div id="stage-loading" aria-live="polite"><span class="spinner" aria-hidden="true"></span>판 까는 중…</div>
+    <div id="stage-note" hidden role="status"></div>
+    <div id="picked-so-far" hidden><strong>먼저 뽑힌 메뉴</strong><ul></ul></div>
     <div id="result" hidden role="dialog" aria-labelledby="result-title">
       <button id="result-close" aria-label="기록하지 않고 닫기" title="기록하지 않고 닫기 (X 또는 Esc)">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -454,6 +536,16 @@
       <p class="result-note"><kbd>X</kbd> 또는 <kbd>Esc</kbd>: 기록 없이 닫고 조건 바꾸기</p>
     </div>
   </main>
+  <div id="vote-picker" hidden role="dialog" aria-labelledby="vote-who">
+    <header><h3 id="vote-who"></h3><button type="button" id="vote-close" aria-label="닫기">×</button></header>
+    <div id="vote-taken"></div>
+    <input id="vote-search" type="search" autocomplete="off" placeholder="메뉴 검색 · 초성 ㄱㅊ" aria-label="메뉴 검색">
+    <ul id="vote-results"></ul>
+    <footer id="vote-foot" hidden>
+      <span class="stepper-mini"><button type="button" id="vote-less" aria-label="공 하나 빼기">−</button><span id="vote-count">공 1개</span><button type="button" id="vote-more" aria-label="공 하나 더">+</button></span>
+      <button type="button" id="vote-clear">투표 취소</button>
+    </footer>
+  </div>
   <dialog id="settings" aria-labelledby="settings-title">
     <header class="dialog-head">
       <h2 id="settings-title">설정</h2>

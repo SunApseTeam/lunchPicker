@@ -1,4 +1,5 @@
 import { menuIcon } from '../../domain/icon.js';
+import { floorAt } from '../../domain/physics.js';
 import { BUBBLE_FONT } from './bench.js';
 import { FRAME, cameraTarget, createCamera, followCamera, onScreen } from './camera.js';
 import { createGround } from './ground.js';
@@ -14,9 +15,13 @@ const BALL_COLORS = ['#ffe066', '#4fd1c5', '#ff6b6b', '#8c9eff', '#ff8ad8'];
 const INK = '#1c1d26';
 const MUTED = '#8a8c9c';
 const ACCENT = '#f96262';
+// Winning slots are gold mats; losing ones plain grey.
+const WIN = '#ffc93c';
+const LOSE = '#a7a49a';
 // There is no board panel: the balls fall over the ground of the chosen map theme (themes/),
 // which also draws the pegs, bumpers and side walls, crisper and bigger than anything in the
-// ground. The slots are mats in their colours with the place's name on a cream sign.
+// ground. The slots are mats: gold ones win and grey ones lose, each with a cream sign under it
+// that names the menu a winning slot is holding.
 // How far the side walls reach past the board when nothing wider stands above them.
 const HEDGE = 90;
 // Room under the waiting line for the members' names, above where thick walls begin.
@@ -89,12 +94,6 @@ export function createRenderer(canvas) {
       burst(event.ball.cx, event.ball.cy, MUTED, 24, 320);
     } else if (event.type === 'open' && board) {
       fx.open(board, now);
-    } else if (event.type === 'pop') {
-      const { cx, cy } = event.target;
-      fx.pop(cx, cy, now);
-      burst(cx, cy, '#ffb52e', 40, 900);
-      burst(cx, cy, '#ff5a4f', 24, 700);
-      burst(cx, cy, '#ffffff', 18, 500);
     } else if (event.type === 'trigger' && board) {
       fx.press(board, now);
       const x = (board.slotEdges[board.triggerSlot] + board.slotEdges[board.triggerSlot + 1]) / 2;
@@ -209,7 +208,7 @@ export function createRenderer(canvas) {
 
   // span: how far the scene reaches sideways (wider than the board when the waiting line is),
   // and wallTop: where the side walls start, just under the waiting line's names.
-  function drawBoard(board, slotMenus, winners, world, now, span) {
+  function drawBoard(board, slots, winners, world, now, span) {
     drawWalls(board, span);
 
     ctx.setLineDash([10, 16]);
@@ -221,69 +220,81 @@ export function createRenderer(canvas) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Each slot is a mat in its colour, with the place's name on a little cream sign.
-    for (let i = 0; i < slotMenus.length; i++) {
+    // Each slot is a mat, gold when it wins and grey when it loses, over a little cream sign.
+    for (let i = 0; i < slots.length; i++) {
       const shift = slideShift(board, i, now);
       const x0 = board.slotEdges[i] + shift;
       const x1 = board.slotEdges[i + 1] + shift;
-      if (slotMenus[i].trigger) {
+      const slot = slots[i];
+      if (slot.kind === 'trigger') {
         fx.drawTriggerSlot(board, now, x0, x1);
         continue;
       }
-      const color = SLOT_COLORS[i % SLOT_COLORS.length];
+      const win = slot.kind === 'win';
       const won = winners?.includes(i);
-      ctx.fillStyle = hexToRgba(color, won ? 0.6 + 0.2 * Math.sin(now * 8) : 0.32);
-      ctx.strokeStyle = hexToRgba(color, 0.9);
-      ctx.lineWidth = 2.5;
+      const color = win ? WIN : slot.kind === 'lose' ? LOSE : SLOT_COLORS[i % SLOT_COLORS.length];
+      const glow = win ? (won ? 0.75 + 0.2 * Math.sin(now * 8) : 0.42 + 0.12 * Math.sin(now * 3 + i)) : 0.26;
+      ctx.fillStyle = hexToRgba(color, glow);
+      ctx.strokeStyle = hexToRgba(color, 0.95);
+      ctx.lineWidth = win ? 3.5 : 2.5;
       ctx.beginPath();
       ctx.roundRect(x0 + 5, board.dividerTop - 6, x1 - x0 - 10, board.height - board.dividerTop + 2, 12);
       ctx.fill();
       ctx.stroke();
       const max = x1 - x0 - 26;
-      let size = 26;
-      ctx.font = `700 ${size}px "IBM Plex Sans KR", sans-serif`;
-      while (ctx.measureText(slotMenus[i].name).width > max && size > 16) {
-        size -= 2;
-        ctx.font = `700 ${size}px "IBM Plex Sans KR", sans-serif`;
-      }
-      const label = fitText(slotMenus[i].name, max);
       const cx = (x0 + x1) / 2;
       const mid = (board.floorY + board.height) / 2;
-      const tags = slotMenus[i].tags ?? [];
       ctx.fillStyle = won ? '#fffdf2' : 'rgba(255, 253, 242, 0.92)';
-      ctx.strokeStyle = 'rgba(120, 100, 70, 0.45)';
+      ctx.strokeStyle = win ? 'rgba(190, 140, 20, 0.7)' : 'rgba(120, 100, 70, 0.45)';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.roundRect(x0 + 11, board.floorY + 8, x1 - x0 - 22, board.height - board.floorY - 14, 10);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      // The placeholder slots shown before enough menus are picked have no id and no icon.
-      if (slotMenus[i].id) {
-        // Tags take a third line under the name, so the icon and name move up to make room.
-        const lift = tags.length > 0 ? 10 : 0;
-        ctx.fillText(label, cx, mid + 16 - lift);
-        if (tags.length > 0) {
-          ctx.font = '500 15px "IBM Plex Sans KR", sans-serif';
-          ctx.fillStyle = 'rgba(28, 29, 38, 0.62)';
-          ctx.fillText(fitText(tags.map((t) => `#${t}`).join(' '), max), cx, mid + 31);
+      const emoji = (size) => `${size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+      if (slot.menu) {
+        // A winning slot taken: the menu of the ball in it.
+        let size = 24;
+        ctx.font = `700 ${size}px "IBM Plex Sans KR", sans-serif`;
+        while (ctx.measureText(slot.menu.name).width > max && size > 15) {
+          size -= 2;
+          ctx.font = `700 ${size}px "IBM Plex Sans KR", sans-serif`;
         }
-        ctx.font = `${Math.min(38, max * 0.55)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
-        ctx.fillText(menuIcon(slotMenus[i]), cx, mid - 18 - lift);
+        ctx.fillStyle = INK;
+        ctx.fillText(fitText(slot.menu.name, max), cx, mid + 16);
+        ctx.font = emoji(Math.min(34, max * 0.5));
+        ctx.fillText(menuIcon(slot.menu), cx, mid - 17);
+      } else if (win) {
+        ctx.font = emoji(Math.min(30, max * 0.45));
+        ctx.fillText('🏆', cx, mid - 15);
+        ctx.font = '400 26px "Black Han Sans", sans-serif';
+        ctx.fillStyle = '#b07800';
+        ctx.fillText('당첨', cx, mid + 18);
       } else {
-        ctx.fillText(label, cx, mid);
+        ctx.font = '400 28px "Black Han Sans", sans-serif';
+        ctx.fillStyle = slot.kind === 'lose' ? MUTED : INK;
+        ctx.fillText(slot.kind === 'lose' ? '꽝' : '?', cx, mid);
       }
     }
-    // The floor is a rail; the dividers are its posts.
+    // The floor is a rail dipping into a bowl in every slot; the dividers are its posts.
+    ctx.beginPath();
+    ctx.moveTo(-4, floorAt(board, 0));
+    for (let x = 0; x <= board.width; x += 6) ctx.lineTo(x, floorAt(board, Math.min(x, board.width - 0.01)));
+    ctx.lineTo(board.width + 4, floorAt(board, board.width - 0.01));
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = theme.wood.ink;
+    ctx.lineWidth = 8;
+    ctx.stroke();
+    ctx.strokeStyle = theme.wood.fill;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.lineCap = 'butt';
     ctx.fillStyle = theme.wood.fill;
     ctx.strokeStyle = theme.wood.ink;
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(-4, board.floorY - 3, board.width + 8, 6, 3);
-    ctx.fill();
-    ctx.stroke();
     for (const x of board.dividers) {
       const w = board.dividerHalfWidth + 2;
       ctx.beginPath();
@@ -659,18 +670,22 @@ export function createRenderer(canvas) {
   function drawBench(bench, now, dt, faces) {
     if (!bench) return;
     if (bench.loading) drawLoadingDots(board.width / 2, board.dropY, now);
-    // The picked ones dim the rest only while they wait together; once they drop, the rest cheer.
-    const anyPicked = bench.spots.some((s) => !bench.away.has(s.member.id) && bench.isSelected(s.member));
+    // The ones who voted dim the rest only while they wait together; once they drop, the rest cheer.
+    const anyPicked = bench.spots.some((s) => !bench.away.has(s.member.id) && bench.voteOf(s.member));
     const spots = shownSpots(bench, dt);
     for (const spot of spots) {
       if (bench.away.has(spot.member.id)) continue;
-      const picked = bench.isSelected(spot.member);
+      const vote = bench.voteOf(spot.member);
+      const picked = Boolean(vote);
       const ball = benchBall(spot, now, picked);
       ctx.globalAlpha = anyPicked && !picked ? 0.55 : 1;
       drawBall(ball, now, spot.member, faces);
       ctx.globalAlpha = 1;
       if (faces?.loading(spot.member)) drawPhotoLoading(ball, spot.member.color, now);
-      if (picked) drawPickMark(ball, now);
+      if (picked) {
+        drawPickMark(ball, now);
+        drawMenuBadge(ball, vote.menu, vote.count);
+      }
       ctx.font = `700 ${Math.min(18, Math.round(spot.r * 0.5))}px "IBM Plex Sans KR", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
@@ -727,9 +742,9 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
-  // A picked member glows, on the line and all the way down, in a pale pastel rainbow with no
-  // hard edge: soft puffs of light in rainbow order drifting round them, each twinkling on its
-  // own, with little stars glinting among them, and a check badge.
+  // A member who voted glows on the line in a pale pastel rainbow with no hard edge: soft puffs of
+  // light in rainbow order drifting round them, each twinkling on its own, with little stars
+  // glinting among them.
   const GLOW_PUFFS = 12;
   function drawPickMark(b, now) {
     const reach = b.R + 40;
@@ -770,28 +785,50 @@ export function createRenderer(canvas) {
       ctx.quadraticCurveTo(x, y, x, y - size);
       ctx.fill();
     }
-    const bx = b.cx + b.R * 0.72;
-    const by = b.cy - b.R * 0.72;
-    ctx.fillStyle = ACCENT;
-    ctx.beginPath();
-    ctx.arc(bx, by, 12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(bx - 5, by);
-    ctx.lineTo(bx - 1, by + 4);
-    ctx.lineTo(bx + 6, by - 4);
-    ctx.stroke();
   }
 
-  // Screen point (CSS pixels on the canvas) to board coordinates.
+  // The menu a ball stands for, on a round badge at its shoulder, with how many balls the member
+  // put on it when more than one.
+  function drawMenuBadge(b, menu, count = 1) {
+    if (!menu) return;
+    const r = Math.max(15, b.R * 0.36);
+    const bx = b.cx + b.R * 0.74;
+    const by = b.cy - b.R * 0.74;
+    ctx.fillStyle = '#fffdf2';
+    ctx.strokeStyle = ACCENT;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(bx, by, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${Math.round(r * 1.15)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+    ctx.fillStyle = INK;
+    ctx.fillText(menuIcon(menu), bx, by + 1);
+    if (count < 2) return;
+    ctx.font = '700 15px "IBM Plex Sans KR", sans-serif';
+    const label = `×${count}`;
+    const w = ctx.measureText(label).width + 10;
+    ctx.fillStyle = ACCENT;
+    ctx.beginPath();
+    ctx.roundRect(bx - w / 2, by + r - 6, w, 19, 9);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(label, bx, by + r + 3.5);
+  }
+
+  // Screen point (CSS pixels on the canvas) to board coordinates, and back; toScreen also scales
+  // a length r.
   function toBoard(sx, sy) {
     return { x: camera.x + (sx - width / 2) / camera.scale, y: camera.y + (sy - height / 2) / camera.scale };
   }
+  function toScreen(x, y, r = 0) {
+    return { x: (x - camera.x) * camera.scale + width / 2, y: (y - camera.y) * camera.scale + height / 2, r: r * camera.scale };
+  }
 
   let board = null;
-  function draw({ board: current, world, slotMenus, winners, view, now, dt, bench, memberOf, pickedOf, faces, liftOf }) {
+  function draw({ board: current, world, slots, winners, view, now, dt, bench, memberOf, menuOf, faces, liftOf }) {
     board = current;
     const balls = world?.balls ?? [];
     const span = bench
@@ -806,7 +843,7 @@ export function createRenderer(canvas) {
     ctx.clearRect(0, 0, width, height);
     ground.draw(ctx, { theme, width, height, dpr, now, cam, board });
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - cam.x * s), dpr * (height / 2 - cam.y * s));
-    drawBoard(board, slotMenus, winners, world, now, span);
+    drawBoard(board, slots, winners, world, now, span);
     drawBench(bench, now, dt, faces);
     // A member who jumped in from the ledge is drawn easing over from where they stood.
     const lifted = (b, fn) => {
@@ -822,10 +859,9 @@ export function createRenderer(canvas) {
         if (b.charged) fx.drawCharge(b, now);
         drawBall(b, now, memberOf?.(b), faces);
         if (b.charged) fx.drawChargeSparkles(b, now);
-        if (pickedOf?.(b)) drawPickMark(b, now);
+        drawMenuBadge(b, menuOf?.(b));
       });
     }
-    fx.drawPops(now);
     // Falling members' lines go over every ball, so no ball hides another one's bubble.
     const all = { lo: Math.min(0, bench?.bounds.lo ?? 0), hi: Math.max(board.width, bench?.bounds.hi ?? 0) };
     for (const b of balls) {
@@ -860,5 +896,5 @@ export function createRenderer(canvas) {
     theme = themeById(id);
   }
 
-  return { resize, draw, onEvent, celebrate, slideSlots, toBoard, poke, jiggle, setTheme, visible: (ball) => onScreen(camera, ball, width, height) };
+  return { resize, draw, onEvent, celebrate, slideSlots, toBoard, toScreen, poke, jiggle, setTheme, visible: (ball) => onScreen(camera, ball, width, height) };
 }

@@ -5,6 +5,7 @@ import { createRound, stepAfter, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
 import { DEFAULT_SETTINGS } from '../../domain/settings.js';
 import { DEFAULT_TEAM, memberPhysics, parseMember } from '../../domain/team.js';
+import { ballsOf, castVote, countVotes, dropVote, firstStage, maxWant, nextStage, tally, voteProblem } from '../../domain/votes.js';
 import { loadSettings, saveSettings } from '../../infrastructure/settings-storage.js';
 import { readSnapshot, writeSnapshot } from '../../infrastructure/snapshot.js';
 import { createStore, storeMode } from '../../infrastructure/store.js';
@@ -19,11 +20,13 @@ import { SLOT_COLORS, createRenderer } from './render.js';
 import { THEMES } from './themes/index.js';
 import { createSettingsDialog } from './settings-dialog.js';
 import { createTagEditor } from './tag-editor.js';
+import { createVotePicker } from './vote-picker.js';
 
-const MAX_PICK = 5;
 // Balls brushing past each other are not worth a line; a real knock is.
 const BUMP_SPEED = 250;
 const SLOWMO_SCALE = 0.4;
+// How long the note says who is out before the rest drop again for what is left to pick.
+const BETWEEN_TIME = 3.2;
 
 const mode = storeMode();
 const lunch = createLunchService(createStore(mode), () => todayString());
@@ -70,34 +73,42 @@ let settings = loadSettings(DEFAULT_SETTINGS);
 audio.setMuted(!settings.sound);
 renderer.setTheme(settings.theme);
 let menus = keptMenus ?? [];
-// Today's candidates: place id -> how many slots it takes. A place more people want gets more
-// slots, so it is likelier to be picked, but it is still one place: see createRound's groups.
-const picks = new Map();
-// What each slot on the board stands for, left to right: the places, and among them the spring
-// trigger's slot, which is nobody's place.
-const TRIGGER_SLOT = { trigger: true, id: null, name: '' };
-let slotMenus = [];
+const menuById = (id) => menus.find((m) => m.id === id) ?? { id, name: '?', tags: [] };
+// Today's votes, member id -> { menuId, count }, and how many menus to pick. want is what was asked
+// for; fewer voted menus cap it (see wantNow).
+let votes = new Map();
+let want = 1;
+const wantNow = () => Math.min(want, maxWant(votes));
+const ballCount = () => [...votes.values()].reduce((n, v) => n + v.count, 0);
+const votesReady = () => !voteProblem(votes, maxSlots(settings.size));
+
+// What each slot on the board is, left to right: { kind: 'win' | 'lose' | 'trigger' | 'wait' }, a
+// slot per ball and among them the spring trigger's, which is nobody's. 'wait' slots stand in
+// until there are votes enough to play.
+let slots = [];
 let board = null;
-// One seed per round: the bumpers and the trigger slot stay put while candidates are toggled,
-// and fit whatever board width the slot count gives.
+// The bumpers stay put for a round; slotSeed places the trigger slot and the winning slots, and
+// 칸 섞기 draws a new one.
 let bumperSeed = Math.random() * 2 ** 32;
-// Where 칸 섞기 last put the trigger slot among the places, or null for where the seed puts it.
-let triggerAt = null;
-// Lays out the board for places in this order, with the trigger slot slipped in among them.
-function layOut(places) {
-  const n = places.length;
+let slotSeed = Math.random() * 2 ** 32;
+// n slots for the balls, k of them winning, with the trigger slot slipped in among them.
+function layOut(n, k) {
   const rng = mulberry32(bumperSeed);
   const bumpers = randomBumpers(rng, boardWidth(n + 1));
-  const seeded = Math.floor(rng() * (n + 1));
-  const at = triggerAt === null ? seeded : Math.min(triggerAt, n);
-  slotMenus = [...places.slice(0, at), TRIGGER_SLOT, ...places.slice(at)];
+  const draw = mulberry32(slotSeed);
+  const at = Math.floor(draw() * (n + 1));
+  const kinds = shuffle(Array.from({ length: n }, (_, i) => (k === 0 ? 'wait' : i < k ? 'win' : 'lose')), draw);
+  slots = [...kinds.slice(0, at), 'trigger', ...kinds.slice(at)].map((kind) => ({ kind }));
   board = createBoard(slotWidthsWithTrigger(n, settings.size, at), settings.size, bumpers, at);
 }
-layOut([{ name: '?' }, { name: '?' }]);
+layOut(2, 0);
 
-// idle: board ready. running: balls in flight. result: winners shown, waiting for 확정 or 다시.
-// members[i] is the team member who fell as player i of the round.
-let phase = { name: 'idle', round: null, members: [] };
+// idle: board ready. running: balls in flight. between: two winning slots went to one menu, and
+// the rest are about to play again for what is left. result: the picks shown, waiting for 확정 or
+// 다시. stage: the balls in play (stage.balls[i] is player i of the round), what is left to pick
+// and what is picked so far (see domain/votes.js). voters: everyone who dropped at the start.
+let phase = { name: 'idle', round: null, stage: null, voters: new Set() };
+const ballOf = (ball) => phase.stage?.balls[ball.player];
 // A member standing past the board's edge, or behind a neighbour, starts the drop elsewhere;
 // for a moment they are drawn swooping over from where they stood.
 const HOP_TIME = 0.35;
@@ -113,67 +124,45 @@ let timeScale = 1;
 let accumulator = 0;
 let saving = false;
 
-const maxCandidates = () => maxSlots(settings.size);
-const candidates = () => menus.filter((m) => !m.hidden && picks.has(m.id));
-const candidateSlots = () => candidates().flatMap((m) => Array(picks.get(m.id)).fill(m));
-const maxPick = () => Math.max(1, Math.min(MAX_PICK, candidates().length - 1));
 const benchSpots = () => bench.spots(board, (m) => memberPhysics(settings, m).radius);
 
-function candidatesValid() {
-  return candidates().length >= 2 && candidateSlots().length <= maxCandidates();
-}
-
-const idsKey = (list) => list.map((m) => m.id).sort().join();
-
-function shuffle(list) {
+function shuffle(list, rng = Math.random) {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
 }
 
-// Slot indices in a finished round point into slotMenus, so only rebuild while idle.
-// Slots are not equally likely (bumpers and walls shape where balls land), so fairness comes
-// from the shuffle: every menu is equally likely to sit in every slot. Every new round
-// reshuffles the menus and moves the bumpers; a rename, icon or size change keeps today's
-// order when the candidates are the same.
+// Slots line up with a round's balls, so only rebuild while idle. Slots are not equally likely
+// (bumpers and walls shape where balls land), so fairness comes from where the winning slots go,
+// drawn afresh every round. A vote changing keeps the draw.
 function rebuildBoard({ reshuffle = false } = {}) {
   if (phase.name !== 'idle') return;
-  const next = candidatesValid() ? candidateSlots() : null;
-  const places = slotMenus.filter((s) => !s.trigger);
-  const same = next && idsKey(next) === idsKey(places);
   if (reshuffle) {
     bumperSeed = Math.random() * 2 ** 32;
-    triggerAt = null;
+    slotSeed = Math.random() * 2 ** 32;
   }
-  if (!next) layOut([{ name: '?' }, { name: '?' }]);
-  else if (same && !reshuffle) layOut(places.map((s) => next.find((m) => m.id === s.id)));
-  else layOut(shuffle(next));
+  if (votesReady()) layOut(ballCount(), wantNow());
+  else layOut(2, 0);
 }
 
-// 칸 섞기: before a drop, mixes the slots up again. The places take a new order and the trigger
-// slot a new spot, always different from before; the bumpers stay put. The slots slide over to
-// where they now stand.
+// 칸 섞기: before a drop, the winning slots and the trigger slot move, always somewhere new; the
+// bumpers stay put. The slots slide over from where they stood.
 function shuffleSlots() {
-  if (phase.name !== 'idle' || !candidatesValid()) return;
-  const before = slotMenus;
+  if (phase.name !== 'idle' || !votesReady()) return;
+  const before = slots;
   const centres = board.slotEdges.slice(1).map((x, i) => (board.slotEdges[i] + x) / 2);
-  const places = before.filter((s) => !s.trigger);
-  const key = (slots) => slots.map((s) => (s.trigger ? '*' : s.id)).join();
-  for (let tries = 0; tries < 20 && key(slotMenus) === key(before); tries++) {
-    triggerAt = Math.floor(Math.random() * (places.length + 1));
-    layOut(shuffle(places));
+  const key = (list) => list.map((s) => s.kind).join();
+  for (let tries = 0; tries < 20 && key(slots) === key(before); tries++) {
+    slotSeed = Math.random() * 2 ** 32;
+    layOut(ballCount(), wantNow());
   }
-  // Each slot slides from where the same menu (or the trigger slot) stood, taking repeats of a
-  // menu in order.
-  const used = new Set();
-  const fromX = slotMenus.map((s) => {
-    const j = before.findIndex((o, k) => o === s && !used.has(k));
-    used.add(j);
-    return centres[j];
-  });
+  // Each slot slides from where the one before it of the same kind stood, in order.
+  const from = new Map();
+  before.forEach((s, i) => from.set(s.kind, [...(from.get(s.kind) ?? []), centres[i]]));
+  const fromX = slots.map((s) => from.get(s.kind).shift());
   renderer.slideSlots(board, fromX, performance.now() / 1000);
   audio.shuffle();
 }
@@ -185,44 +174,70 @@ function setPhase(next) {
   renderResult();
 }
 
-// Everyone falls from where they wait on the drop line; only the picked members' landings count.
-// The rest are along to knock them about.
+// Everyone who voted falls from where they wait on the drop line, a ball per vote.
 function drop() {
   if (phase.name !== 'idle' || dropProblem()) return;
+  votePicker.close();
   audio.unlock();
-  accumulator = 0;
-  const spots = benchSpots();
-  const members = spots.map((s) => s.member);
-  const from = spots;
-  const players = members.map((m, i) => ({ physics: memberPhysics(settings, m), x: from[i].x, counts: bench.isSelected(m) }));
-  const round = createRound(board, players, Math.random, slotMenus.map((m) => m.id));
-  // Where each one really starts (on the board, clear of the others) versus where they stood.
-  const now = performance.now() / 1000;
-  hop = { at: now, gap: round.world.balls.map((b) => ({ x: from[b.player].x - b.cx, y: from[b.player].y - b.cy })) };
-  setPhase({ name: 'running', round, members });
-  for (const m of bench.chosen()) bench.shout(m, 'drop', now);
+  const balls = ballsOf(votes, bench.order());
+  play(firstStage(balls, wantNow()), new Set(balls.map((b) => b.member.id)));
 }
 
-// Who counts in the round on screen, and where they landed: [{ member, slot }].
-function results() {
-  return phase.round.winners.flatMap((slot, i) => (slot === null ? [] : [{ member: phase.members[i], slot }]));
+// Drops a stage's balls on the board as it is laid out, each from where its member stands.
+function play(stage, voters) {
+  accumulator = 0;
+  const spots = benchSpots();
+  const spotOf = (m) => spots.find((s) => s.member.id === m.id);
+  const players = stage.balls.map((b) => ({ physics: memberPhysics(settings, b.member), x: spotOf(b.member).x }));
+  const wins = slots.flatMap((s, i) => (s.kind === 'win' ? [i] : []));
+  const round = createRound(board, players, Math.random, wins);
+  // Where each one really starts (on the board, clear of the others) versus where they stood.
+  const now = performance.now() / 1000;
+  hop = {
+    at: now,
+    gap: round.world.balls.map((b) => {
+      const from = spotOf(stage.balls[b.player].member);
+      return { x: from.x - b.cx, y: from.y - b.cy };
+    }),
+  };
+  setPhase({ name: 'running', round, stage, voters });
+  for (const m of new Set(stage.balls.map((b) => b.member))) bench.shout(m, 'drop', now);
+}
+
+// After a round: the menus in the winning slots are picked. If one menu took two of them, the
+// note says so, and a moment later the rest play again for what is left on a board of their own.
+function settleRound() {
+  const next = nextStage(phase.stage, phase.round.winners.map((w) => w.player));
+  if (next.want === 0) {
+    setPhase({ ...phase, name: 'result', picked: next.picked });
+    return;
+  }
+  setPhase({ ...phase, name: 'between', next, at: performance.now() / 1000 });
+}
+
+function playOn() {
+  const { next, voters } = phase;
+  slotSeed = Math.random() * 2 ** 32;
+  layOut(next.balls.length, next.want);
+  audio.shuffle();
+  play(next, voters);
 }
 
 function backToIdle() {
   bench.reshuffle();
   bench.quiet(performance.now() / 1000);
-  phase = { name: 'idle', round: null, members: [] };
+  phase = { name: 'idle', round: null, stage: null, voters: new Set() };
   rebuildBoard({ reshuffle: true });
   setPhase(phase);
 }
 
 async function confirmResult() {
   if (phase.name !== 'result' || saving) return;
-  const picked = results().map(({ slot, member }) => ({ menu: slotMenus[slot], member }));
+  const { picked } = phase;
   saving = true;
   try {
-    await lunch.recordPicks(picked.map(({ menu, member }) => ({ menuId: menu.id, memberId: member.id })));
-    toast(`${picked.map(({ menu }) => menu.name).join(', ')} 기록 완료. 맛있게 드세요!`);
+    await lunch.recordPicks(picked.map(({ menuId, member }) => ({ menuId, memberId: member.id })));
+    toast(`${picked.map(({ menuId }) => menuById(menuId).name).join(', ')} 기록 완료. 맛있게 드세요!`);
     backToIdle();
   } catch (err) {
     toast(err.message, true);
@@ -231,8 +246,7 @@ async function confirmResult() {
   }
 }
 
-// Changing the candidates or who drops while a result is up means the team wants another
-// go on new terms: the result closes unrecorded and a fresh board is set up. False while balls
+// Changing the votes while a result is up means the team wants another go on new terms: the result closes unrecorded and a fresh board is set up. False while balls
 // are still falling.
 function leaveResult() {
   if (phase.name === 'result') backToIdle();
@@ -247,45 +261,49 @@ function retry() {
 
 function onEngineEvent(event) {
   const now = performance.now() / 1000;
+  const who = (ball) => ballOf(ball)?.member;
   renderer.onEvent(event, now);
   // Plain knocks are everywhere; only being flung (a bumper, or bouncing off a ball in a slot)
   // gets a line.
-  if (event.type === 'hit' && (event.kind === 'bumper' || event.kind === 'slotBounce')) bench.shout(phase.members[event.ball.player], 'bounce', now);
+  if (event.type === 'hit' && (event.kind === 'bumper' || event.kind === 'slotBounce')) bench.shout(who(event.ball), 'bounce', now);
   // Two falling members running into each other both have something to say about it.
   if (event.type === 'hit' && event.kind === 'ball' && event.speed > BUMP_SPEED) {
-    bench.shout(phase.members[event.ball.player], 'bump', now);
-    bench.shout(phase.members[event.target.player], 'bump', now);
+    bench.shout(who(event.ball), 'bump', now);
+    bench.shout(who(event.target), 'bump', now);
   }
   if (event.type === 'hit') audio.hit(event.kind, event.speed, event.ball.cx, board.width);
   else if (event.type === 'settle') audio.settle(event.ball.cx, board.width);
   else if (event.type === 'redrop') {
     audio.redrop();
-    bench.shout(phase.members[event.ball.player], 'drop', now);
+    bench.shout(who(event.ball), 'drop', now);
   } else if (event.type === 'open') {
     audio.open();
-  } else if (event.type === 'pop') {
-    audio.pop(event.target.cx, board.width);
-    bench.shout(phase.members[event.ball.player], 'bump', now);
   } else if (event.type === 'trigger') {
     audio.trigger(event.ball.cx, board.width);
-    bench.shout(phase.members[event.ball.player], 'trigger', now);
+    bench.shout(who(event.ball), 'trigger', now);
   } else if (event.type === 'spring') {
     audio.spring();
+  } else if (event.type === 'claim' && event.win && phase.round.wins) {
+    // Into a winning slot: a burst of colour over it.
+    renderer.celebrate(board, [event.slot]);
   } else if (event.type === 'unclaim') {
-    // Knocked out of the place they had: they have something to say about that.
-    bench.shout(phase.members[event.ball.player], 'bounce', now);
+    // Knocked out of the slot they had: they have something to say about that, and losing a
+    // winning slot cracks.
+    if (phase.round.wins?.has(event.slot)) audio.pop(event.ball.cx, board.width);
+    bench.shout(who(event.ball), 'bounce', now);
   } else if (event.type === 'done') {
-    audio.win(event.winners.length);
+    settleRound();
+    if (phase.name !== 'result') return;
+    audio.win(phase.picked.length);
     renderer.celebrate(board, event.winners);
-    for (const { member } of results()) bench.shout(member, 'win', now);
-    setPhase({ ...phase, name: 'result' });
+    for (const { member } of phase.picked) bench.shout(member, 'win', now);
   }
 }
 
-// Slow motion is for the moment of truth: a picked member past the pegs, not yet in a slot. The
-// others bouncing about in the slots do not hold it in slow motion.
+// Slow motion is for the moment of truth: every ball still moving is past the pegs and one of them
+// is not yet in a slot.
 function inFinale(round) {
-  const moving = round.world.balls.filter((b) => !b.settled && round.players[b.player].counts);
+  const moving = round.world.balls.filter((b) => !b.settled);
   return moving.length > 0 && moving.every((b) => b.cy > board.pegBottom + 30) && moving.some((b) => b.zone === null);
 }
 
@@ -306,8 +324,8 @@ function frame(nowMs) {
   } else {
     timeScale = 1;
   }
-  // After the result, the members who did not count keep tumbling down to rest.
-  if (phase.name === 'result') {
+  // After a round, the ones who did not win keep tumbling down to rest.
+  if (phase.name === 'result' || phase.name === 'between') {
     accumulator += dt;
     for (let steps = 0; accumulator >= DT && steps < 40; steps++) {
       stepAfter(phase.round);
@@ -315,21 +333,29 @@ function frame(nowMs) {
     }
   }
   const now = nowMs / 1000;
-  const away = new Set(phase.members.map((m) => m.id));
+  if (phase.name === 'between' && now - phase.at > BETWEEN_TIME) playOn();
+  const away = phase.voters;
   const spots = benchSpots();
   const bounds = bench.bounds(spots, board);
+  const owners = phase.round?.owners;
+  // A winning slot taken shows the menu of the ball in it.
+  const shown = slots.map((s, i) => (s.kind === 'win' && owners?.has(i) ? { ...s, menu: menuById(ballOf(owners.get(i)).menuId) } : s));
+  const voteOf = (member) => {
+    const vote = votes.get(member.id);
+    return vote ? { menu: menuById(vote.menuId), count: vote.count } : null;
+  };
   renderer.draw({
     board,
     world: phase.round?.world,
-    slotMenus,
-    winners: phase.name === 'result' ? results().map(({ slot }) => slot) : null,
-    view: { mode: phase.name, slowmo },
+    slots: shown,
+    winners: phase.name === 'result' ? phase.round.winners.map((w) => w.slot) : null,
+    view: { mode: phase.name === 'between' ? 'result' : phase.name, slowmo },
     now,
     dt,
-    bench: { spots, bounds, dragged: press?.at ? { member: press.member, ...press.at } : null, isSelected: bench.isSelected, speeches: bench.chatter(now, spots, away, bounds), away, shoutOf: bench.shoutOf, loading: loading.team, radius: settings.size },
+    bench: { spots, bounds, dragged: press?.at ? { member: press.member, ...press.at } : null, voteOf, speeches: bench.chatter(now, spots, away, bounds), away, shoutOf: bench.shoutOf, loading: loading.team, radius: settings.size },
     liftOf,
-    memberOf: (ball) => phase.members[ball.player],
-    pickedOf: (ball) => phase.round?.players[ball.player].counts === true,
+    memberOf: (ball) => ballOf(ball)?.member,
+    menuOf: (ball) => (ballOf(ball) ? menuById(ballOf(ball).menuId) : null),
     faces,
   });
 }
@@ -337,42 +363,55 @@ function frame(nowMs) {
 function dropProblem() {
   if (loading.menus) return '가게 목록을 불러오는 중이에요';
   if (loading.team) return '팀원을 불러오는 중이에요';
-  const n = candidates().length;
-  const max = maxCandidates();
-  if (n < 2) return '후보를 2개 이상 골라 주세요';
-  if (candidateSlots().length > max) return `지금 구슬 크기로는 칸을 ${max}개까지 만들 수 있어요`;
-  if (bench.count() === 0) return '보드 위 팀원을 누르거나 1~6 키로 골라 주세요';
-  if (bench.count() > maxPick()) return `후보가 ${n}곳이라 ${maxPick()}명까지 떨어질 수 있어요`;
-  return '';
+  return voteProblem(votes, maxSlots(settings.size));
 }
 
 function renderControls() {
-  const n = candidates().length;
-  const slots = candidateSlots().length;
-  $('#candidate-count').textContent = slots > n ? `${n}곳 · 칸 ${slots}` : n;
-  const chosen = bench.chosen();
-  $('#pick-count').textContent = `${chosen.length}명`;
-  $('#pick-names').textContent = chosen.map((m) => m.name).join(', ');
+  const busy = phase.name === 'running' || phase.name === 'between';
+  const balls = ballCount();
+  const kinds = new Set([...votes.values()].map((v) => v.menuId)).size;
+  $('#voter-count').textContent = votes.size;
+  $('#want-count').textContent = wantNow();
+  $('#want-less').disabled = busy || wantNow() <= 1;
+  $('#want-more').disabled = busy || wantNow() >= maxWant(votes);
+  $('#vote-status').textContent = votes.size ? `메뉴 ${kinds}가지 · 공 ${balls}개 · 당첨 칸 ${wantNow()}개` : '';
   const problem = dropProblem();
   $('#drop-hint').textContent = problem;
   $('#drop').disabled = Boolean(problem) || phase.name !== 'idle';
-  $('#shuffle').disabled = phase.name !== 'idle' || !candidatesValid();
-  $('#drop').textContent = phase.name === 'running' ? '떨어지는 중…' : chosen.length > 1 ? `${chosen.length}명 떨어뜨리기` : '떨어뜨리기';
+  $('#shuffle').disabled = phase.name !== 'idle' || !votesReady();
+  $('#drop').textContent = busy ? '떨어지는 중…' : balls > 0 ? `공 ${balls}개 떨어뜨리기` : '떨어뜨리기';
 }
+
+const faceImg = (member) => {
+  const url = faces.url(member);
+  return url ? `<img src="${escapeHtml(url)}" alt="">` : '';
+};
+const pickChips = (picked) => picked.map(({ menuId, member }) => `<li>${faceImg(member)}${menuIcon(menuById(menuId))} ${escapeHtml(menuById(menuId).name)}</li>`).join('');
 
 function renderResult() {
   const overlay = $('#result');
+  // Between rounds: who took what, and that the rest go again.
+  const note = $('#stage-note');
+  note.hidden = phase.name !== 'between';
+  if (phase.name === 'between') {
+    const { next } = phase;
+    const people = new Set(next.balls.map((b) => b.member.id)).size;
+    note.innerHTML = `<p>같은 메뉴가 겹쳤어요!</p><ul>${pickChips(next.picked)}</ul><small>남은 ${people}명이 메뉴 ${next.want}개를 두고 다시 겨뤄요</small>`;
+  }
+  const sofar = $('#picked-so-far');
+  sofar.hidden = !(phase.name === 'running' && phase.stage.picked.length > 0);
+  if (!sofar.hidden) sofar.querySelector('ul').innerHTML = pickChips(phase.stage.picked);
   if (phase.name !== 'result') {
     overlay.hidden = true;
     return;
   }
-  const picked = results().map(({ slot, member }) => ({ menu: slotMenus[slot], color: SLOT_COLORS[slot % SLOT_COLORS.length], member }));
+  const { picked } = phase;
   $('#result-title').textContent = picked.length > 1 ? `오늘은 ${picked.length}곳으로 나눠 가요` : '오늘의 점심은';
   $('#result-names').innerHTML = picked
-    .map(({ menu, color, member }) => {
-      const face = faces.url(member);
-      const who = `<span class="who">${face ? `<img src="${escapeHtml(face)}" alt="">` : ''}${escapeHtml(member.name)}</span>`;
-      return `<li style="--chip:${color}">${who}${menuIcon(menu)} ${escapeHtml(menu.name)}</li>`;
+    .map(({ menuId, member }, i) => {
+      const menu = menuById(menuId);
+      const who = `<span class="who">${faceImg(member)}${escapeHtml(member.name)} 픽</span>`;
+      return `<li style="--chip:${SLOT_COLORS[(i * 3) % SLOT_COLORS.length]}">${who}${menuIcon(menu)} ${escapeHtml(menu.name)}</li>`;
     })
     .join('');
   overlay.hidden = false;
@@ -390,7 +429,7 @@ async function loadMenus() {
 }
 
 function renderMenus() {
-  menuPanel.render(menus, picks, candidateSlots().length >= maxCandidates());
+  menuPanel.render(menus, tally(votes, bench.order()), (m) => faces.url(m));
   renderControls();
 }
 
@@ -411,35 +450,19 @@ async function attempt(action) {
 }
 
 const menuPanel = createMenuPanel({
-  onToggle(id, checked) {
-    if (!leaveResult()) return;
-    if (checked) picks.set(id, 1);
-    else picks.delete(id);
-    rebuildBoard();
-    renderMenus();
-  },
-  // One more (or one fewer) slot for a place, when more people want it.
-  onSlots(id, delta) {
-    if (!leaveResult() || !picks.has(id)) return;
-    const next = picks.get(id) + delta;
-    if (next < 1 || (delta > 0 && candidateSlots().length >= maxCandidates())) return;
-    picks.set(id, next);
-    rebuildBoard();
-    renderMenus();
-  },
   async onRename(id, name) {
     await attempt(() => lunch.renameMenu(id, name));
     await refreshMenus();
   },
+  // A hidden place takes its votes with it.
   async onHide(id) {
     if (!leaveResult()) return;
-    picks.delete(id);
+    votes = new Map([...votes].filter(([, v]) => v.menuId !== id));
     await attempt(() => lunch.setMenuHidden(id, true));
     await refreshMenus();
   },
   async onUnhide(id) {
     if (!leaveResult()) return;
-    picks.set(id, 1);
     await attempt(() => lunch.setMenuHidden(id, false));
     await refreshMenus();
   },
@@ -451,7 +474,7 @@ const menuPanel = createMenuPanel({
   },
   async onAdd(name) {
     if (!leaveResult()) return false;
-    const added = await attempt(async () => picks.set((await lunch.addMenu(name)).id, 1));
+    const added = await attempt(() => lunch.addMenu(name));
     await refreshMenus();
     return added;
   },
@@ -487,7 +510,7 @@ function applySettings(next) {
 const settingsDialog = createSettingsDialog({
   settings: () => settings,
   onChange: applySettings,
-  sizeNote: (s) => `이 크기로는 후보를 최대 ${maxSlots(s.size)}개까지 넣을 수 있어요. 다음 판부터 적용돼요.`,
+  sizeNote: (s) => `이 크기로는 공을 최대 ${maxSlots(s.size)}개까지 떨어뜨릴 수 있어요. 다음 판부터 적용돼요.`,
 });
 
 // The map theme buttons on the board: the picked one shows its name.
@@ -501,14 +524,58 @@ $('#theme-picker').addEventListener('click', (e) => {
   if (button && button.dataset.theme !== settings.theme) applySettings({ ...settings, theme: button.dataset.theme });
 });
 
-// Clicking a waiting member picks them for the next drop, or puts them back.
-function toggleMember(member) {
-  if (!member || !leaveResult()) return;
-  // Picking past the limit swaps out the latest pick. Before two places are chosen there is no
-  // limit to go by yet but the usual cap.
+// Votes. Each change shows at once on the line, in the sidebar, on the board and in the picker.
+function afterVotes() {
+  rebuildBoard();
+  renderMenus();
+  const member = votePicker.member();
+  if (member) votePicker.update(pickerState(member));
+}
+
+function vote(member, menuId) {
+  if (!leaveResult()) return;
+  votes = castVote(votes, member.id, menuId);
   const now = performance.now() / 1000;
-  bench.toggle(member, now, candidates().length >= 2 ? maxPick() : MAX_PICK);
+  bench.cheer(member, now);
   renderer.jiggle(member, now);
+  afterVotes();
+}
+
+const votePicker = createVotePicker({
+  onVote: vote,
+  onCount(member, delta) {
+    if (!leaveResult()) return;
+    votes = countVotes(votes, member.id, delta);
+    renderer.jiggle(member, performance.now() / 1000);
+    afterVotes();
+  },
+  onClear(member) {
+    if (!leaveResult()) return;
+    votes = dropVote(votes, member.id);
+    bench.hush(member);
+    afterVotes();
+  },
+});
+
+function pickerState(member) {
+  return { menus, vote: votes.get(member.id) ?? null, tally: tally(votes, bench.order()), faceUrl: (m) => faces.url(m) };
+}
+
+// Pressing a waiting member opens the window to pick their menu under their face, or closes it.
+function openPicker(member) {
+  if (!member || phase.name === 'running' || phase.name === 'between') return;
+  if (votePicker.member() === member) return votePicker.close();
+  const spot = benchSpots().find((s) => s.member === member);
+  const rect = canvas.getBoundingClientRect();
+  const at = renderer.toScreen(spot.x, spot.y, spot.r);
+  renderer.jiggle(member, performance.now() / 1000);
+  votePicker.open(member, { x: rect.left + at.x, y: rect.top + at.y, r: at.r }, pickerState(member));
+}
+
+function setWant(delta) {
+  if (!leaveResult()) return;
+  want = Math.min(Math.max(1, wantNow() + delta), maxWant(votes));
+  rebuildBoard();
   renderControls();
 }
 
@@ -528,17 +595,18 @@ function poke(e) {
   renderer.poke(e.clientX - rect.left, e.clientY - rect.top, performance.now() / 1000);
 }
 
-// Pressing a waiting member and letting go picks them; pressing and moving drags them along the
-// line to another place, where they stay when let go. press: the member held down, or null.
+// Pressing a waiting member and letting go opens their menu picker; pressing and moving drags
+// them along the line to another place, where they stay when let go, or onto a place in the
+// sidebar, which votes for it. press: the member held down, or null.
 const DRAG_FROM = 8;
 let press = null;
 let pressEndedAt = -Infinity;
 canvas.addEventListener('pointerdown', (e) => {
   const member = memberAt(e);
-  if (member) press = { member, id: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, at: null };
+  if (member) press = { member, id: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, at: null, from: bench.order().indexOf(member), over: null };
 });
 // A touch that starts on a member is theirs, not the page's to scroll. That also stops the click
-// a tap would make, so pointerup picks them instead.
+// a tap would make, so pointerup opens their picker instead.
 canvas.addEventListener('touchstart', (e) => {
   if (press) e.preventDefault();
 }, { passive: false });
@@ -556,7 +624,14 @@ canvas.addEventListener('pointermove', (e) => {
     }
     if (press.dragging) {
       press.at = boardPoint(e);
-      bench.move(press.member, bench.placeAt(benchSpots(), press.at.x));
+      const over = placeUnder(e);
+      if (over !== press.over) {
+        press.over?.classList.remove('drop-target');
+        over?.classList.add('drop-target');
+        press.over = over;
+      }
+      // Over the sidebar the member keeps their place in the line.
+      bench.move(press.member, over ? press.from : bench.placeAt(benchSpots(), press.at.x));
       canvas.style.cursor = 'grabbing';
       return;
     }
@@ -567,24 +642,36 @@ canvas.addEventListener('pointerup', (e) => {
   if (press?.id !== e.pointerId) return;
   if (!press.dragging) {
     poke(e);
-    toggleMember(press.member);
+    openPicker(press.member);
+  } else if (press.over) {
+    press.over.classList.remove('drop-target');
+    vote(press.member, press.over.dataset.id);
   }
   press = null;
   pressEndedAt = e.timeStamp;
   canvas.style.cursor = memberAt(e) ? 'grab' : '';
 });
 canvas.addEventListener('pointercancel', () => {
+  press?.over?.classList.remove('drop-target');
   press = null;
 });
+// The place in the sidebar under the pointer, if any: a row of the list or of today's votes.
+function placeUnder(e) {
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  return el?.closest('#menu-list li[data-id], #vote-summary li[data-id]') ?? null;
+}
 // Any other click on the scene gets a little reaction. A press on a member was dealt with on
 // pointerup, and the click that follows it is skipped.
 canvas.addEventListener('click', (e) => {
   if (e.timeStamp - pressEndedAt < 400) return;
+  votePicker.close();
   poke(e);
 });
 $('#result-close').addEventListener('click', leaveResult);
 $('#drop').addEventListener('click', drop);
 $('#shuffle').addEventListener('click', shuffleSlots);
+$('#want-less').addEventListener('click', () => setWant(-1));
+$('#want-more').addEventListener('click', () => setWant(1));
 $('#confirm').addEventListener('click', confirmResult);
 $('#retry').addEventListener('click', retry);
 
@@ -599,8 +686,9 @@ document.addEventListener('keydown', (e) => {
     drop();
   } else if (e.code === 'KeyS') {
     shuffleSlots();
-  } else if (/^Digit[1-9]$/.test(e.code) && phase.name !== 'running') {
-    toggleMember(bench.byKey(Number(e.code.slice(5))));
+  } else if (/^Digit[1-9]$/.test(e.code)) {
+    e.preventDefault();
+    openPicker(bench.byKey(Number(e.code.slice(5))));
   } else if (phase.name !== 'result') {
     return;
   } else if (e.key === 'Enter') {
@@ -620,12 +708,13 @@ if (new URLSearchParams(location.search).has('debug')) {
     balls: () => phase.round?.world.balls ?? [],
     closed: () => [...(phase.round?.world.closed ?? [])],
     visible: renderer.visible,
-    bench: () => benchSpots().map((s) => ({ id: s.member.id, x: s.x, y: s.y, r: s.r, picked: bench.isSelected(s.member) })),
-    members: () => phase.members.map((m) => m.id),
+    bench: () => benchSpots().map((s) => ({ id: s.member.id, x: s.x, y: s.y, r: s.r, vote: votes.get(s.member.id) ?? null })),
+    members: () => phase.stage?.balls.map((b) => b.member.id) ?? [],
     winners: () => phase.round?.winners ?? null,
-    slots: () => slotMenus.map((s) => (s.trigger ? '*' : s.name)),
+    picked: () => (phase.picked ?? phase.next?.picked ?? phase.stage?.picked ?? []).map((p) => ({ menuId: p.menuId, member: p.member.id })),
+    slots: () => slots.map((s) => s.kind),
     trigger: () => ({ slot: board.triggerSlot, opened: phase.round?.trigger.openAt ?? null, pressed: phase.round?.trigger.at ?? null }),
-    said: () => phase.members.map((m) => bench.shoutOf(m, performance.now() / 1000)?.line ?? null),
+    said: () => (phase.stage?.balls ?? []).map((b) => bench.shoutOf(b.member, performance.now() / 1000)?.line ?? null),
   };
 }
 
@@ -634,7 +723,7 @@ window.addEventListener('resize', () => renderer.resize());
 
 settingsDialog.render();
 renderThemes();
-setPhase({ name: 'idle', round: null, members: [] });
+setPhase({ name: 'idle', round: null, stage: null, voters: new Set() });
 renderer.resize();
 requestAnimationFrame(frame);
 // The scene stays covered until the web fonts are in (or 3 seconds, as the page text does), so
@@ -648,7 +737,7 @@ loadTeam().then((team) => {
   const same = keptTeam && JSON.stringify(team) === JSON.stringify(keptTeam);
   if (!same && phase.name === 'idle') showTeam(team);
 });
-// Today's candidates start empty: the team picks where it feels like going each day.
+// Today's votes start empty: the team picks where it feels like going each day.
 const showMenus = () => {
   loading = { ...loading, menus: false };
   rebuildBoard();
