@@ -19,6 +19,10 @@ const MAX_SETTLED_BOUNCES = 8;
 const SHOVE = 600;
 const SHOVE_FROM = 250;
 const SHOVE_FULL = 1100;
+// The spring under the slots: how hard it throws every ball in them straight back up. 1250 lifts
+// a ball about 330, past the bottom peg row 250 above the floor, so it is thrown back among the
+// pegs and bumpers and lands all over again.
+const SPRING_SPEED = 1250;
 // Bumper kicks and peg scatter set how wild a path looks. Tuned on single drops: about five
 // sharp left-right reversals per drop and 1.3 board widths of sideways travel, while the landing
 // slot stays unrelated to where the ball was dropped.
@@ -95,8 +99,27 @@ export function minSlotWidth(radius) {
   return 2 * radius + SLOT_MARGIN;
 }
 
+// The spring trigger's slot: one extra slot, among the places' slots, with a button for a
+// floor. It is exactly as wide as the biggest ball, narrower than theirs. With the whole team
+// dropping and only a ball's first landing pressing it, that set it off in 65% (2 places), 50%
+// (4) and 45% (6) of 40 rounds each; 30 wider made it 85%, 57% and 43%.
+export function triggerWidth(radius) {
+  return 2 * radius;
+}
+
+// The board for n places has room for one slot more (a peg gap wider, up to the full width);
+// the trigger slot takes its width at `at` and the places share the rest equally.
+export function slotWidthsWithTrigger(n, radius, at) {
+  const width = boardWidth(n + 1);
+  const place = (width - triggerWidth(radius)) / n;
+  const widths = Array.from({ length: n }, () => place);
+  widths.splice(at, 0, triggerWidth(radius));
+  return widths;
+}
+
+// How many places fit beside the trigger slot at the full width.
 export function maxSlots(radius) {
-  return Math.min(12, Math.floor(GEOMETRY.width / minSlotWidth(radius)));
+  return Math.min(12, Math.floor((GEOMETRY.width - triggerWidth(radius)) / minSlotWidth(radius)));
 }
 
 export function equalWidths(n) {
@@ -173,7 +196,8 @@ export const FIXED_BUMPERS = [
   { row: 1, x: 410 }, { row: 1, x: 790 }, { row: 3, x: 600 }, { row: 5, x: 220 }, { row: 5, x: 980 }, { row: 6, x: 505 },
 ];
 
-export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers = FIXED_BUMPERS) {
+// triggerSlot: which slot is the spring trigger's, or none. See slotWidthsWithTrigger.
+export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers = FIXED_BUMPERS, triggerSlot = null) {
   const g = GEOMETRY;
   const width = boardWidth(slotWidths.length);
   const total = slotWidths.reduce((a, b) => a + b, 0);
@@ -202,7 +226,22 @@ export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers 
     height: floorY + 90,
     slotEdges,
     dividers,
+    triggerSlot,
   };
+}
+
+// The spring under every slot throws each ball in them back up, a little sideways, so even a
+// ball that had settled goes round again. Returns the balls thrown.
+export function springSlots(world) {
+  const { rng } = world;
+  const thrown = world.balls.filter((b) => b.zone !== null);
+  for (const b of thrown) {
+    setVelocity(b, (rng() * 2 - 1) * 260, -(SPRING_SPEED + rng() * 200));
+    // In the air at once: no slot drag, and its slot bounces start afresh.
+    b.bounceAt = world.time;
+    b.slotBounces = 0;
+  }
+  return thrown;
 }
 
 export function slotAt(board, x) {

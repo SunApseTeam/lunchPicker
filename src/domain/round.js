@@ -1,4 +1,4 @@
-import { DT, createWorld, dropBall, removeBall, stepWorld } from './physics.js';
+import { DT, createWorld, dropBall, removeBall, springSlots, stepWorld } from './physics.js';
 
 const DROP_MARGIN = 30;
 // How long everyone must have been down in the slots before the result is called.
@@ -32,7 +32,9 @@ export function createRound(board, players, rng, groups = board.slotEdges.slice(
   const world = createWorld(board, rng, players[0].physics);
   players.forEach((player, i) => dropPlayer(world, player, i, player.x));
   // owners: group -> the ball that claimed it.
-  return { world, players, groups, owners: new Map(), done: false, winners: null };
+  // trigger: who pressed the trigger slot's button and when. It works once a round. landed: the
+  // balls that have reached a slot floor at least once.
+  return { world, players, groups, owners: new Map(), done: false, winners: null, trigger: { by: null, at: null }, landed: new Set() };
 }
 
 const counts = (round, ball) => round.players[ball.player].counts !== false;
@@ -51,7 +53,8 @@ function claimPlaces(round, emit) {
   const claimed = new Set(owners.values());
   const fresh = world.balls.filter((b) => b.settled && counts(round, b) && !claimed.has(b)).sort((a, b) => a.enteredAt - b.enteredAt);
   for (const ball of fresh) {
-    if (owners.has(groups[ball.slot])) {
+    // The trigger slot is nobody's place: a ball that comes to rest there goes round again.
+    if (ball.slot === world.board.triggerSlot || owners.has(groups[ball.slot])) {
       removeBall(world, ball);
       emit({ type: 'redrop', ball, slot: ball.slot });
       dropPlayer(world, round.players[ball.player], ball.player, null);
@@ -62,9 +65,28 @@ function claimPlaces(round, emit) {
   world.closed = new Set(groups.flatMap((group, slot) => (owners.has(group) && owners.get(group).zone !== slot ? [slot] : [])));
 }
 
+// A ball dropping straight into the trigger slot from the pegs presses its button, once a round,
+// and at that very moment every ball in every slot is thrown back up, the one that pressed it
+// too. One that bounces over from another slot does not press it: that made it go off in most
+// rounds.
+function pressTrigger(round, emit) {
+  const { world, trigger, landed } = round;
+  const slot = world.board.triggerSlot;
+  const fresh = world.balls.filter((b) => b.onFloor && !landed.has(b));
+  for (const b of fresh) landed.add(b);
+  if (slot === null || trigger.by) return;
+  const ball = fresh.find((b) => b.zone === slot);
+  if (!ball) return;
+  trigger.by = ball;
+  trigger.at = world.time;
+  emit({ type: 'trigger', ball });
+  emit({ type: 'spring', balls: springSlots(world) });
+}
+
 export function stepRound(round, emit = () => {}) {
   if (round.done) return;
   stepWorld(round.world, emit);
+  pressTrigger(round, emit);
   claimPlaces(round, emit);
   // The result waits until everyone is down in the slots: a straggler landing late can still
   // knock a counted ball out of its place. It is called once everyone has come to rest, or once

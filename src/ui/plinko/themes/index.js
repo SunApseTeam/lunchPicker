@@ -4,6 +4,7 @@
 // A theme is { id, name, icon } plus:
 //   glow, pegShadow, dropLine, poke   colours for knocks, peg shadows, the drop line, click puffs
 //   wood { fill, ink }                the slot floor rail, dividers and lids
+//   trigger { cap, rim, glow }        the spring trigger button
 //   wall { dark, base, light, outline, shadow }   the side walls
 //   tile(ctx, rnd, wrapped, size)     paints one seamless tile of ground
 //   weather(ctx, env)                 what moves over the ground (see ground.js)

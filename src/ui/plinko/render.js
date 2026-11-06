@@ -2,6 +2,7 @@ import { menuIcon } from '../../domain/icon.js';
 import { BUBBLE_FONT } from './bench.js';
 import { FRAME, cameraTarget, createCamera, followCamera, onScreen } from './camera.js';
 import { createGround } from './ground.js';
+import { createSpringFx } from './spring-fx.js';
 import { hexToRgba } from './themes/art.js';
 import { themeById } from './themes/index.js';
 
@@ -31,6 +32,7 @@ export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   const camera = createCamera();
   const ground = createGround();
+  const fx = createSpringFx(ctx);
   let theme = themeById('meadow');
   const flash = new Map();
   // slot -> when its lid started closing, so the lid can slide shut.
@@ -82,6 +84,18 @@ export function createRenderer(canvas) {
       if (event.kind === 'bumper') burst(event.target.x, event.target.y, theme.glow, 20, 520);
     } else if (event.type === 'redrop') {
       burst(event.ball.cx, event.ball.cy, MUTED, 24, 320);
+    } else if (event.type === 'trigger' && board) {
+      fx.press(board, now);
+      const x = (board.slotEdges[board.triggerSlot] + board.slotEdges[board.triggerSlot + 1]) / 2;
+      burst(x, board.floorY - 20, theme.trigger.cap, 30, 760);
+      burst(x, board.floorY - 20, '#ffffff', 16, 520);
+    } else if (event.type === 'spring' && board) {
+      for (let i = 0; i < board.slotEdges.length - 1; i++) {
+        const x = (board.slotEdges[i] + board.slotEdges[i + 1]) / 2;
+        burst(x, board.floorY - 10, theme.trigger.cap, 14, 700);
+        burst(x, board.floorY - 10, theme.trigger.glow, 10, 520);
+      }
+      for (const b of event.balls) hurt(b, 1100, now);
     }
   }
 
@@ -184,6 +198,10 @@ export function createRenderer(canvas) {
     for (let i = 0; i < slotMenus.length; i++) {
       const x0 = board.slotEdges[i];
       const x1 = board.slotEdges[i + 1];
+      if (slotMenus[i].trigger) {
+        fx.drawTriggerSlot(board, theme, now, x0, x1);
+        continue;
+      }
       const color = SLOT_COLORS[i % SLOT_COLORS.length];
       const won = winners?.includes(i);
       ctx.fillStyle = hexToRgba(color, won ? 0.6 + 0.2 * Math.sin(now * 8) : 0.32);
@@ -246,6 +264,7 @@ export function createRenderer(canvas) {
       ctx.stroke();
     }
     drawLids(world, now);
+    fx.drawSprings(board, theme, now);
 
     for (const peg of board.pegs) {
       const glow = Math.max(0, 1 - (now - (flash.get(peg) ?? -10)) / 0.35);
@@ -716,10 +735,13 @@ export function createRenderer(canvas) {
       : { lo: 0, hi: board.width, wallTop: 0 };
     followCamera(camera, cameraTarget(board, { ...view, span: span.hi - span.lo }, balls, width, height), dt);
     const s = camera.scale;
+    // The spring jolts the whole view: ground and board move together.
+    const jolt = fx.shakeOffset(now);
+    const cam = { ...camera, x: camera.x - jolt.x / s, y: camera.y - jolt.y / s };
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    ground.draw(ctx, { theme, width, height, dpr, now, cam: camera, board });
-    ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - camera.x * s), dpr * (height / 2 - camera.y * s));
+    ground.draw(ctx, { theme, width, height, dpr, now, cam, board });
+    ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (width / 2 - cam.x * s), dpr * (height / 2 - cam.y * s));
     drawBoard(board, slotMenus, winners, world, now, span);
     drawBench(bench, now, faces);
     // A member who jumped in from the ledge is drawn easing over from where they stood.
@@ -744,6 +766,8 @@ export function createRenderer(canvas) {
       if (said) lifted(b, () => drawBubble(said.line, { x: b.cx, y: b.cy, r: b.R }, now - said.at, said.life, all, said.member.color));
     }
     drawParticles(dt);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fx.drawBanner(width, height, theme, now);
   }
 
   // A click on the scene at screen point (sx, sy): a ripple, a puff of petals, and the flowers,

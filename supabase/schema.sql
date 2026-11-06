@@ -96,3 +96,12 @@ update public.members set lines_pick = array['드디어!', '매운 데로 갈게
 -- added by hand, leave it empty.
 alter table public.visits add column if not exists member_id text null
   references public.members (id) on update cascade on delete set null;
+
+-- What a member says on pressing the spring trigger. Empty means the built-in line.
+alter table public.members add column if not exists lines_trigger text[] null;
+update public.members set lines_trigger = array['눌러 버렸다!','이거 뭐예요?','다 같이 튀어!'] where id = 'jungwon' and lines_trigger is null;
+update public.members set lines_trigger = array['스위치 발견!','다 날아가라~','꾹!'] where id = 'dongwon' and lines_trigger is null;
+update public.members set lines_trigger = array['어? 뭐 눌렀다','미안, 내가 했어','다시 섞자'] where id = 'sungmin' and lines_trigger is null;
+update public.members set lines_trigger = array['딸깍!','버튼은 못 참지','판 엎는다!'] where id = 'junhyuk' and lines_trigger is null;
+update public.members set lines_trigger = array['어머 눌렀어요','다시 섞어요~','뿅!'] where id = 'eunseol' and lines_trigger is null;
+update public.members set lines_trigger = array['스프링 발동!','숨은 기능이다','다들 조심~'] where id = 'beomgyu' and lines_trigger is null;
