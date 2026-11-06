@@ -277,20 +277,98 @@ test('the trigger slot opens when the first ball lands elsewhere, then is presse
   assert.ok(pressedRounds >= 4, `pressed in ${pressedRounds} of 12 rounds`);
 });
 
-test('once open, a ball that gets into the trigger slot any way at all presses it', () => {
+test('once open, the button reaches past the slot mouth: a ball just above it presses it, and the slot is covered soon after', () => {
   const at = 2;
   const board = createBoard(slotWidthsWithTrigger(2, physics.radius, at), physics.radius, [], at);
   const round = createRound(board, [{ physics, x: board.slotEdges[1] / 2 }], mulberry32(5));
-  let i = 0;
-  for (; i < 30 / DT && round.trigger.openAt === null; i++) stepRound(round);
+  for (let i = 0; i < 30 / DT && round.trigger.openAt === null; i++) stepRound(round);
   assert.notEqual(round.trigger.openAt, null, 'opened by the first landing');
-  // Set straight down inside the slot, as if it had rolled or bounced in.
-  const ball = dropBall(round.world, (board.slotEdges[at] + board.slotEdges[at + 1]) / 2, 0, physics, board.floorY - physics.radius - 40);
+  assert.ok(!round.world.closed.has(at), 'open');
+  // Hanging just over the mouth, not yet in the slot, as if it had rolled up to it.
+  const x = (board.slotEdges[at] + board.slotEdges[at + 1]) / 2;
+  const ball = dropBall(round.world, x, 0, physics, board.dividerTop - 16 - physics.radius);
   ball.player = 0;
   const types = [];
-  for (let k = 0; k < 2 / DT && !round.trigger.by; k++) stepRound(round, (e) => types.push(e.type));
+  stepRound(round, (e) => types.push(e.type));
   assert.equal(round.trigger.by, ball);
   assert.ok(types.includes('spring'));
+  for (let i = 0; i < 0.6 / DT; i++) stepRound(round);
+  assert.ok(round.world.closed.has(at), 'covered once the springs have gone off');
+});
+
+test('a place\'s other slots close the moment a decider is in one of them, before it settles', () => {
+  const board = createBoard(equalWidths(3), physics.radius, []);
+  let checked = 0;
+  for (let seed = 1; seed <= 6; seed++) {
+    const round = createRound(board, [{ physics, x: board.width / 2 }], mulberry32(seed), ['a', 'a', 'b']);
+    for (let i = 0; i < 30 / DT && !round.done; i++) {
+      stepRound(round);
+      const [ball] = round.world.balls;
+      if (ball.zone === null || ball.settled) continue;
+      const others = ball.zone === 2 ? [] : [1 - ball.zone];
+      for (const slot of others) assert.ok(round.world.closed.has(slot), `seed ${seed}: slot ${slot} closed while ${ball.zone} is entered`);
+      checked += 1;
+      break;
+    }
+  }
+  assert.ok(checked > 0);
+});
+
+test('a ball left sitting on a lid is dropped again, glowing if it decides', () => {
+  const board = createBoard(equalWidths(2), physics.radius, []);
+  const round = createRound(board, [{ physics, x: board.width * 0.25 }, { physics, x: board.width * 0.75 }], mulberry32(2), ['a', 'a']);
+  // Hold the second player up at the top until the first has the place.
+  const [, sitter] = round.world.balls;
+  const held = sitter.pts.map((q) => ({ ...q }));
+  const hold = () => sitter.pts.forEach((q, i) => Object.assign(q, held[i]));
+  for (let i = 0; i < 30 / DT && round.owners.size === 0; i++) {
+    stepRound(round);
+    hold();
+  }
+  const owner = round.owners.get('a');
+  const lidded = 1 - owner.slot;
+  assert.ok(round.world.closed.has(lidded));
+  // Then set them down on the lid, with nowhere free to slide to.
+  const x = (board.slotEdges[lidded] + board.slotEdges[lidded + 1]) / 2;
+  const dy = board.lidY - physics.radius - 30 - sitter.cy;
+  const dx = x - sitter.cx;
+  for (const q of sitter.pts) {
+    q.x += dx;
+    q.px = q.x;
+    q.y += dy;
+    q.py = q.y;
+  }
+  const redrops = [];
+  for (let i = 0; i < 3 / DT && redrops.length === 0; i++) stepRound(round, (e) => e.type === 'redrop' && redrops.push(e));
+  assert.equal(redrops[0]?.ball, sitter, 'dropped again off the lid');
+  const again = round.world.balls.find((b) => b.player === 1);
+  assert.ok(again.charged, 'glows on the way down');
+});
+
+test('a glowing decider bursts the non-deciders it touches, and nobody else', () => {
+  const board = createBoard(equalWidths(3), physics.radius, []);
+  const round = createRound(board, [{ physics, x: 300 }, { physics, x: 600, counts: false }, { physics, x: 900 }], mulberry32(4));
+  const [decider, rider, other] = round.world.balls;
+  decider.charged = true;
+  // Set the glowing one right beside both of the others.
+  const shift = (b, dx, dy) => {
+    for (const p of b.pts) {
+      p.x += dx;
+      p.px += dx;
+      p.y += dy;
+      p.py += dy;
+    }
+    b.cx += dx;
+    b.cy += dy;
+  };
+  shift(rider, decider.cx + decider.R + rider.R + 2 - rider.cx, decider.cy - rider.cy);
+  shift(other, decider.cx - decider.R - other.R - 2 - other.cx, decider.cy - other.cy);
+  const pops = [];
+  stepRound(round, (e) => e.type === 'pop' && pops.push(e));
+  assert.equal(pops.length, 1);
+  assert.equal(pops[0].target, rider);
+  assert.ok(!round.world.balls.includes(rider), 'the non-decider is gone');
+  assert.ok(round.world.balls.includes(other), 'another decider is never popped');
 });
 
 test('the springs throw every ball in the slots back up, settled ones too, and no other', () => {

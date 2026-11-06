@@ -89,6 +89,12 @@ export function createRenderer(canvas) {
       burst(event.ball.cx, event.ball.cy, MUTED, 24, 320);
     } else if (event.type === 'open' && board) {
       fx.open(board, now);
+    } else if (event.type === 'pop') {
+      const { cx, cy } = event.target;
+      fx.pop(cx, cy, now);
+      burst(cx, cy, '#ffb52e', 40, 900);
+      burst(cx, cy, '#ff5a4f', 24, 700);
+      burst(cx, cy, '#ffffff', 18, 500);
     } else if (event.type === 'trigger' && board) {
       fx.press(board, now);
       const x = (board.slotEdges[board.triggerSlot] + board.slotEdges[board.triggerSlot + 1]) / 2;
@@ -782,10 +788,13 @@ export function createRenderer(canvas) {
     };
     for (const b of balls) {
       lifted(b, () => {
+        if (b.charged) fx.drawCharge(b, now);
         drawBall(b, now, memberOf?.(b), faces);
+        if (b.charged) fx.drawChargeSparkles(b, now);
         if (pickedOf?.(b)) drawPickMark(b);
       });
     }
+    fx.drawPops(now);
     // Falling members' lines go over every ball, so no ball hides another one's bubble.
     const all = { lo: Math.min(0, bench?.bounds.lo ?? 0), hi: Math.max(board.width, bench?.bounds.hi ?? 0) };
     for (const b of balls) {

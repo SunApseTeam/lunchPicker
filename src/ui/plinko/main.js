@@ -232,6 +232,9 @@ function onEngineEvent(event) {
     bench.shout(phase.members[event.ball.player], 'drop', now);
   } else if (event.type === 'open') {
     audio.open();
+  } else if (event.type === 'pop') {
+    audio.pop(event.target.cx, board.width);
+    bench.shout(phase.members[event.ball.player], 'bump', now);
   } else if (event.type === 'trigger') {
     audio.trigger(event.ball.cx, board.width);
     bench.shout(phase.members[event.ball.player], 'trigger', now);
