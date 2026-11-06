@@ -290,7 +290,7 @@ function frame(nowMs) {
     view: { mode: phase.name, slowmo },
     now,
     dt,
-    bench: { spots, bounds, isSelected: bench.isSelected, speeches: bench.chatter(now, spots, away, bounds), away, shoutOf: bench.shoutOf, loading: loading.team, radius: settings.size },
+    bench: { spots, bounds, dragged: press?.at ? { member: press.member, ...press.at } : null, isSelected: bench.isSelected, speeches: bench.chatter(now, spots, away, bounds), away, shoutOf: bench.shoutOf, loading: loading.team, radius: settings.size },
     liftOf,
     memberOf: (ball) => phase.members[ball.player],
     pickedOf: (ball) => phase.round?.players[ball.player].counts === true,
@@ -475,22 +475,75 @@ function toggleMember(member) {
   renderControls();
 }
 
+function boardPoint(e) {
+  const rect = canvas.getBoundingClientRect();
+  return renderer.toBoard(e.clientX - rect.left, e.clientY - rect.top);
+}
+
 function memberAt(e) {
   if (phase.name === 'running') return null;
-  const rect = canvas.getBoundingClientRect();
-  const p = renderer.toBoard(e.clientX - rect.left, e.clientY - rect.top);
+  const p = boardPoint(e);
   return bench.hit(benchSpots(), p.x, p.y);
 }
-// Any click on the scene gets a little reaction; a click on a waiting member also picks them.
-canvas.addEventListener('click', (e) => {
+
+function poke(e) {
   const rect = canvas.getBoundingClientRect();
-  const now = performance.now() / 1000;
-  renderer.poke(e.clientX - rect.left, e.clientY - rect.top, now);
+  renderer.poke(e.clientX - rect.left, e.clientY - rect.top, performance.now() / 1000);
+}
+
+// Pressing a waiting member and letting go picks them; pressing and moving drags them along the
+// line to another place, where they stay when let go. press: the member held down, or null.
+const DRAG_FROM = 8;
+let press = null;
+let pressEndedAt = -Infinity;
+canvas.addEventListener('pointerdown', (e) => {
   const member = memberAt(e);
-  toggleMember(member);
+  if (member) press = { member, id: e.pointerId, startX: e.clientX, startY: e.clientY, dragging: false, at: null };
 });
+// A touch that starts on a member is theirs, not the page's to scroll. That also stops the click
+// a tap would make, so pointerup picks them instead.
+canvas.addEventListener('touchstart', (e) => {
+  if (press) e.preventDefault();
+}, { passive: false });
 canvas.addEventListener('pointermove', (e) => {
-  canvas.style.cursor = memberAt(e) ? 'pointer' : '';
+  if (press?.id === e.pointerId) {
+    if (!press.dragging && Math.hypot(e.clientX - press.startX, e.clientY - press.startY) > DRAG_FROM) {
+      if (!leaveResult()) {
+        press = null;
+        return;
+      }
+      press.dragging = true;
+      press.at = boardPoint(e);
+      // Keep getting this pointer's moves when it leaves the canvas.
+      canvas.setPointerCapture(e.pointerId);
+    }
+    if (press.dragging) {
+      press.at = boardPoint(e);
+      bench.move(press.member, bench.placeAt(benchSpots(), press.at.x));
+      canvas.style.cursor = 'grabbing';
+      return;
+    }
+  }
+  canvas.style.cursor = memberAt(e) ? 'grab' : '';
+});
+canvas.addEventListener('pointerup', (e) => {
+  if (press?.id !== e.pointerId) return;
+  if (!press.dragging) {
+    poke(e);
+    toggleMember(press.member);
+  }
+  press = null;
+  pressEndedAt = e.timeStamp;
+  canvas.style.cursor = memberAt(e) ? 'grab' : '';
+});
+canvas.addEventListener('pointercancel', () => {
+  press = null;
+});
+// Any other click on the scene gets a little reaction. A press on a member was dealt with on
+// pointerup, and the click that follows it is skipped.
+canvas.addEventListener('click', (e) => {
+  if (e.timeStamp - pressEndedAt < 400) return;
+  poke(e);
 });
 $('#result-close').addEventListener('click', leaveResult);
 $('#drop').addEventListener('click', drop);
