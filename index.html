@@ -150,8 +150,8 @@
     }
     #vote-picker[hidden] { display: none; }
     @keyframes rise { from { transform: translateY(6px); opacity: 0; } }
-    #vote-picker header { display: flex; align-items: center; justify-content: space-between; }
-    #vote-who { margin: 0; font: 400 18px/1 "Black Han Sans", sans-serif; }
+    #vote-picker header { display: flex; align-items: center; gap: 8px; }
+    #vote-who { margin: 0; flex: 1; min-width: 0; font: 400 18px/1 "Black Han Sans", sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #vote-close { background: none; border: 0; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 6px; border-radius: 8px; }
     #vote-taken { display: flex; flex-direction: column; gap: 6px; }
     #vote-taken[hidden] { display: none; }
@@ -172,7 +172,8 @@
       display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px; text-align: left;
       background: none; border: 0; border-radius: 10px;
     }
-    #vote-results button.first { background: var(--panel); }
+    #vote-picker .active { box-shadow: 0 0 0 2px var(--mint) inset; background: var(--panel); }
+    #vote-results button.new { color: var(--accent-text); font-weight: 700; }
     #vote-results .ico { width: 24px; text-align: center; }
     #vote-results li.none { color: var(--muted); font-size: 13px; padding: 8px; }
     #vote-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
@@ -180,8 +181,9 @@
     #vote-foot .stepper-mini { display: flex; align-items: center; gap: 8px; flex: 1; font-weight: 700; }
     #vote-foot .stepper-mini button { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); font-weight: 700; }
     #vote-foot .stepper-mini button:disabled { opacity: .35; cursor: default; }
-    #vote-clear { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
-    #vote-clear:hover { color: var(--text); border-color: var(--muted); }
+    #vote-clear { background: var(--accent); color: #fff; border: 0; border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+    #vote-clear[hidden] { display: none; }
+    #vote-clear:hover { filter: brightness(0.92); }
     #stage-note {
       position: absolute; left: 50%; top: 16px; transform: translateX(-50%); z-index: 4;
       max-width: calc(100% - 32px); padding: 16px 26px; border-radius: 22px; text-align: center;
@@ -537,13 +539,12 @@
     </div>
   </main>
   <div id="vote-picker" hidden role="dialog" aria-labelledby="vote-who">
-    <header><h3 id="vote-who"></h3><button type="button" id="vote-close" aria-label="닫기">×</button></header>
+    <header><h3 id="vote-who"></h3><button type="button" id="vote-clear" hidden>투표 취소</button><button type="button" id="vote-close" aria-label="닫기">×</button></header>
     <div id="vote-taken"></div>
     <input id="vote-search" type="search" autocomplete="off" placeholder="메뉴 검색 · 초성 ㄱㅊ" aria-label="메뉴 검색">
     <ul id="vote-results"></ul>
     <footer id="vote-foot" hidden>
       <span class="stepper-mini"><button type="button" id="vote-less" aria-label="공 하나 빼기">−</button><span id="vote-count">공 1개</span><button type="button" id="vote-more" aria-label="공 하나 더">+</button></span>
-      <button type="button" id="vote-clear">투표 취소</button>
     </footer>
   </div>
   <dialog id="settings" aria-labelledby="settings-title">
