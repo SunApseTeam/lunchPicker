@@ -13,21 +13,28 @@ const MAX_SLOT_BOUNCES = 2;
 // A ball that lands on a settled ball is sent on toward a free slot every time, up to this
 // safety cap, rather than left to pile up on it.
 const MAX_SETTLED_BOUNCES = 8;
-// A ball coming down onto one resting in a slot shoves it the other way: up to this speed, in
-// proportion to how fast the newcomer was falling (from SHOVE_FROM up). Hard enough, it knocks
-// the resting ball over the divider and out of its slot. Only a ball coming down from the pegs
-// shoves: one already flung off a ball lands softly, or knock-outs would set off one another.
-const SHOVE = 600;
-const SHOVE_FROM = 250;
-const SHOVE_FULL = 1100;
+// A ball coming down onto one resting in a slot shoves it the other way: up to SHOVE upward and
+// SHOVE_SIDE of that sideways, in proportion to how fast the newcomer was falling (from
+// SHOVE_FROM up). Hard enough, it knocks the resting ball over the divider and out of its slot. A
+// ball already flung off another one shoves at FLUNG_SHOVE of that, so knock-outs can chain a
+// little without setting one another off for good.
+const SHOVE = 1100;
+const SHOVE_SIDE = 0.8;
+const SHOVE_FROM = 150;
+const SHOVE_FULL = 800;
+const FLUNG_SHOVE = 1;
 // A ball flung off a settled one is aimed at the nearest free slot, however far: its sideways
 // speed is what carries it there in about this long in the air, within HOP_SPEED.
 const HOP_FLIGHT = 0.7;
 const HOP_SPEED = [430, 950];
-// The spring under the slots: how hard it throws every ball in them straight back up. 1250 lifts
-// a ball about 330, past the bottom peg row 250 above the floor, so it is thrown back among the
-// pegs and bumpers and lands all over again.
-const SPRING_SPEED = 1250;
+// The spring under the slots: how hard it throws every ball in them back up, and how far to the
+// side at most. 1800 lifts a ball about 680, halfway up the pegs, so it is thrown back among the
+// pegs and bumpers, scatters across the board and lands all over again.
+const SPRING_SPEED = 1800;
+const SPRING_SIDE = 700;
+// On the way up from the springs a ball flies through the pegs and bumpers, for up to this long:
+// otherwise the bottom rows stop it dead and it barely rises. It meets them again on the way down.
+const SPRING_FLIGHT = 0.8;
 // Bumper kicks and peg scatter set how wild a path looks. Tuned on single drops: about five
 // sharp left-right reversals per drop and 1.3 board widths of sideways travel, while the landing
 // slot stays unrelated to where the ball was dropped.
@@ -251,7 +258,8 @@ export function springSlots(world, also = []) {
   const { rng } = world;
   const thrown = world.balls.filter((b) => b.zone !== null || also.includes(b));
   for (const b of thrown) {
-    setVelocity(b, (rng() * 2 - 1) * 260, -(SPRING_SPEED + rng() * 200));
+    setVelocity(b, (rng() * 2 - 1) * SPRING_SIDE, -(SPRING_SPEED + rng() * 300));
+    b.flyingUntil = world.time + SPRING_FLIGHT;
     // In the air at once: no slot drag, and its slot bounces start afresh.
     b.bounceAt = world.time;
     b.slotBounces = 0;
@@ -564,7 +572,10 @@ function collideStatic(world, b) {
   const floor = floorUnder(world, b);
   const friction = floor === board.lidY ? LID_FRICTION : FLOOR_FRICTION;
   const reach = b.R * 1.6;
+  // Sprung and still rising: through the pegs and bumpers.
+  const flying = b.flyingUntil > world.time && b.vy < 0;
   for (const ob of board.obstacles) {
+    if (flying && (ob.kind === 'peg' || ob.kind === 'bumper')) continue;
     if (Math.abs(b.cx - ob.x) > reach + ob.r || Math.abs(b.cy - ob.y) > reach + ob.r) continue;
     if (inside(b.pts, ob.x, ob.y)) {
       expel(b, ob);
@@ -721,8 +732,8 @@ function slotBounces(world, emit) {
     const reach = free === null ? 0 : Math.abs(free - a.cx) / HOP_FLIGHT;
     const speed = Math.min(HOP_SPEED[1], Math.max(HOP_SPEED[0], reach)) * (0.95 + rng() * 0.1) + (reach ? 0 : rng() * 120);
     setVelocity(a, side * speed, -(760 + rng() * 120));
-    const shove = a.slotBounces > 0 || world.endgame ? 0 : SHOVE * Math.min(1, Math.max(0, (fall - SHOVE_FROM) / (SHOVE_FULL - SHOVE_FROM)));
-    if (shove > 0) setVelocity(base, -side * shove * 0.6, -shove);
+    const shove = world.endgame ? 0 : (a.slotBounces > 0 ? FLUNG_SHOVE : 1) * SHOVE * Math.min(1, Math.max(0, (fall - SHOVE_FROM) / (SHOVE_FULL - SHOVE_FROM)));
+    if (shove > 0) setVelocity(base, -side * shove * SHOVE_SIDE, -shove);
     else for (const p of base.pts) if (p.y < base.cy) p.py -= 5;
     a.bounceAt = world.time;
     a.slotBounces += 1;

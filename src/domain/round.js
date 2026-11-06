@@ -91,11 +91,12 @@ function claimSlots(round, emit) {
       emit({ type: 'claim', ball, slot: ball.slot, win: !round.wins || round.wins.has(ball.slot) });
     }
   }
-  // Once the free slots left all win or all lose, who wins is settled, short of a knock-out:
-  // from then on nobody is knocked out, and the balls still looking are drawn into the free slots.
+  // Once the free slots left all win, the balls still looking for one are the winners, short of a
+  // knock-out: from then on nobody is knocked out, and they are drawn into the free slots. While
+  // only losing slots are left, the winners can still be knocked out of theirs.
   if (round.wins) {
     const free = round.world.board.slotEdges.slice(1).map((_, i) => i).filter((i) => i !== world.board.triggerSlot && !owners.has(i));
-    world.endgame = free.length > 0 && (free.every((i) => round.wins.has(i)) || free.every((i) => !round.wins.has(i)));
+    world.endgame = free.length > 0 && free.every((i) => round.wins.has(i));
   }
   const { triggerSlot } = world.board;
   const { openAt, at } = round.trigger;

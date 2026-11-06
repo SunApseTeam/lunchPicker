@@ -97,6 +97,29 @@ export function groupByDay(timeline) {
   return days;
 }
 
+// Whose picks took the team out most, with medals like the place ranking and the place their
+// picks went to most. A member no longer on the team still shows, by the name '지난 팀원'.
+export function renderWinners(winners, { members = new Map(), photoOf = () => null } = {}) {
+  if (winners.length === 0) return '<p class="empty">아직 누가 뽑았는지 남은 기록이 없어요. 플링코에서 "여기 간다!"를 누르면 쌓여요.</p>';
+  const max = winners[0].count;
+  return `<ul class="hbars winners">${winners
+    .map((w) => {
+      const place = 1 + winners.filter((o) => o.count > w.count).length;
+      const member = members.get(w.memberId);
+      const name = member?.name ?? '지난 팀원';
+      const photo = member && photoOf(member);
+      const face = photo ? `<img src="${escapeHtml(photo)}" alt="" onerror="this.remove()">` : '';
+      const top = w.top ? `<small class="top">${w.top.icon ?? DEFAULT_ICON} ${escapeHtml(w.top.name)}</small>` : '';
+      return `<li class="${place <= 3 ? 'podium' : ''}" title="${escapeHtml(name)}: ${place}위, ${w.count}번 뽑힘, 마지막 ${shortDate(w.last)}">
+        <span class="rank">${place <= 3 ? medal(place) : place}</span>
+        <span class="name who" style="--who:${escapeHtml(member?.color ?? '#a7a49a')}">${face}<span>${escapeHtml(name)}${top}</span></span>
+        <span class="track"><span class="bar win" style="width:${(w.count / max) * 100}%"></span></span>
+        <span class="val">${w.count}번</span>
+      </li>`;
+    })
+    .join('')}</ul>`;
+}
+
 // Who took the team there, when the record says: their face and name.
 function taker(member, photo) {
   if (!member) return '';

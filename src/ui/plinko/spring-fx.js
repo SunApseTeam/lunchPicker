@@ -36,7 +36,7 @@ export function createSpringFx(ctx) {
 
   function press(board, now) {
     pressedAt.set(board, now);
-    jolt(now, 26);
+    jolt(now, 34);
     bannerAt = now;
   }
 

@@ -74,6 +74,25 @@ export function computeStats(menus, visits, today) {
     .map(([tag, count]) => ({ tag, count }))
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'ko'));
 
+  // Whose pick took the team out most: every record that names a member counts for them, ties
+  // going to the one who won most recently. top: the place their picks went to most.
+  const byMember = new Map();
+  for (const v of active) {
+    if (!v.memberId) continue;
+    const entry = byMember.get(v.memberId) ?? { memberId: v.memberId, count: 0, last: '', visits: [] };
+    entry.count += 1;
+    if (v.visitedOn > entry.last) entry.last = v.visitedOn;
+    entry.visits.push(v);
+    byMember.set(v.memberId, entry);
+  }
+  const winners = [...byMember.values()]
+    .map(({ visits: mine, ...rest }) => {
+      const name = leader(mine, names);
+      const top = mine.find((v) => names.get(v.menuId) === name);
+      return { ...rest, top: name ? { name, icon: icons.get(top.menuId) } : null };
+    })
+    .sort((a, b) => b.count - a.count || b.last.localeCompare(a.last) || a.memberId.localeCompare(b.memberId));
+
   const timeline = visits
     .map((v) => ({ ...v, name: names.get(v.menuId) ?? '?', icon: icons.get(v.menuId) }))
     .sort((a, b) => b.visitedOn.localeCompare(a.visitedOn) || b.createdAt.localeCompare(a.createdAt));
@@ -82,6 +101,7 @@ export function computeStats(menus, visits, today) {
     totalVisits: active.length,
     totalDays: new Set(active.map((v) => v.visitedOn)).size,
     ranking,
+    winners,
     stale,
     weekdays: weekdayRows,
     months,
