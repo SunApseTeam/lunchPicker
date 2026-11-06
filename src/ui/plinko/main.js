@@ -81,12 +81,15 @@ let board = null;
 // One seed per round: the bumpers and the trigger slot stay put while candidates are toggled,
 // and fit whatever board width the slot count gives.
 let bumperSeed = Math.random() * 2 ** 32;
+// Where 칸 섞기 last put the trigger slot among the places, or null for where the seed puts it.
+let triggerAt = null;
 // Lays out the board for places in this order, with the trigger slot slipped in among them.
 function layOut(places) {
   const n = places.length;
   const rng = mulberry32(bumperSeed);
   const bumpers = randomBumpers(rng, boardWidth(n + 1));
-  const at = Math.floor(rng() * (n + 1));
+  const seeded = Math.floor(rng() * (n + 1));
+  const at = triggerAt === null ? seeded : Math.min(triggerAt, n);
   slotMenus = [...places.slice(0, at), TRIGGER_SLOT, ...places.slice(at)];
   board = createBoard(slotWidthsWithTrigger(n, settings.size, at), settings.size, bumpers, at);
 }
@@ -141,10 +144,38 @@ function rebuildBoard({ reshuffle = false } = {}) {
   const next = candidatesValid() ? candidateSlots() : null;
   const places = slotMenus.filter((s) => !s.trigger);
   const same = next && idsKey(next) === idsKey(places);
-  if (reshuffle) bumperSeed = Math.random() * 2 ** 32;
+  if (reshuffle) {
+    bumperSeed = Math.random() * 2 ** 32;
+    triggerAt = null;
+  }
   if (!next) layOut([{ name: '?' }, { name: '?' }]);
   else if (same && !reshuffle) layOut(places.map((s) => next.find((m) => m.id === s.id)));
   else layOut(shuffle(next));
+}
+
+// 칸 섞기: before a drop, mixes the slots up again. The places take a new order and the trigger
+// slot a new spot, always different from before; the bumpers stay put. The slots slide over to
+// where they now stand.
+function shuffleSlots() {
+  if (phase.name !== 'idle' || !candidatesValid()) return;
+  const before = slotMenus;
+  const centres = board.slotEdges.slice(1).map((x, i) => (board.slotEdges[i] + x) / 2);
+  const places = before.filter((s) => !s.trigger);
+  const key = (slots) => slots.map((s) => (s.trigger ? '*' : s.id)).join();
+  for (let tries = 0; tries < 20 && key(slotMenus) === key(before); tries++) {
+    triggerAt = Math.floor(Math.random() * (places.length + 1));
+    layOut(shuffle(places));
+  }
+  // Each slot slides from where the same menu (or the trigger slot) stood, taking repeats of a
+  // menu in order.
+  const used = new Set();
+  const fromX = slotMenus.map((s) => {
+    const j = before.findIndex((o, k) => o === s && !used.has(k));
+    used.add(j);
+    return centres[j];
+  });
+  renderer.slideSlots(board, fromX, performance.now() / 1000);
+  audio.shuffle();
 }
 
 function setPhase(next) {
@@ -325,6 +356,7 @@ function renderControls() {
   const problem = dropProblem();
   $('#drop-hint').textContent = problem;
   $('#drop').disabled = Boolean(problem) || phase.name !== 'idle';
+  $('#shuffle').disabled = phase.name !== 'idle' || !candidatesValid();
   $('#drop').textContent = phase.name === 'running' ? '떨어지는 중…' : chosen.length > 1 ? `${chosen.length}명 떨어뜨리기` : '떨어뜨리기';
 }
 
@@ -552,6 +584,7 @@ canvas.addEventListener('click', (e) => {
 });
 $('#result-close').addEventListener('click', leaveResult);
 $('#drop').addEventListener('click', drop);
+$('#shuffle').addEventListener('click', shuffleSlots);
 $('#confirm').addEventListener('click', confirmResult);
 $('#retry').addEventListener('click', retry);
 
@@ -564,6 +597,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
     e.preventDefault();
     drop();
+  } else if (e.code === 'KeyS') {
+    shuffleSlots();
   } else if (/^Digit[1-9]$/.test(e.code) && phase.name !== 'running') {
     toggleMember(bench.byKey(Number(e.code.slice(5))));
   } else if (phase.name !== 'result') {
@@ -588,6 +623,7 @@ if (new URLSearchParams(location.search).has('debug')) {
     bench: () => benchSpots().map((s) => ({ id: s.member.id, x: s.x, y: s.y, r: s.r, picked: bench.isSelected(s.member) })),
     members: () => phase.members.map((m) => m.id),
     winners: () => phase.round?.winners ?? null,
+    slots: () => slotMenus.map((s) => (s.trigger ? '*' : s.name)),
     trigger: () => ({ slot: board.triggerSlot, opened: phase.round?.trigger.openAt ?? null, pressed: phase.round?.trigger.at ?? null }),
     said: () => phase.members.map((m) => bench.shoutOf(m, performance.now() / 1000)?.line ?? null),
   };

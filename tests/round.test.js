@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { DEFAULT_SETTINGS } from '../src/domain/settings.js';
 import {
   DT,
+  GEOMETRY,
   boardWidth,
   createBoard,
   createWorld,
@@ -114,7 +115,7 @@ test('the candidate cap keeps every slot beside the trigger slot wide enough for
   assert.equal(maxSlots(DEFAULT_SETTINGS.size), 8);
   for (let size = 24; size <= 56; size += 4) {
     const n = maxSlots(size);
-    const room = (1200 - triggerWidth(size)) / n;
+    const room = (GEOMETRY.width - triggerWidth(size)) / n;
     assert.ok(room >= minSlotWidth(size), `size ${size}: ${n} slots of ${room}px fit a ball`);
   }
 });
@@ -214,7 +215,7 @@ test('with few slots the board narrows, so a slot is about as wide for 2 as for 
     assert.ok(slot >= 195 && slot <= 225, `${n} slots are ${slot.toFixed(0)}px wide`);
     assert.ok(board.pegs.every((p) => p.x >= 0 && p.x <= board.width), `${n} slots: pegs stay on the board`);
   }
-  assert.equal(boardWidth(9), 1200);
+  assert.equal(boardWidth(9), GEOMETRY.width);
 });
 
 test('narrow boards finish even when nearly every slot gets a ball', () => {
@@ -225,6 +226,20 @@ test('narrow boards finish even when nearly every slot gets a ball', () => {
       for (let i = 0; i < 120 / DT && !round.done; i++) stepRound(round);
       assert.ok(round.done, `${n} slots, round ${seed} finished`);
       assert.equal(new Set(round.winners).size, Math.max(1, n - 1));
+    }
+  }
+});
+
+test('every board has full peg rows that sit evenly between its walls', () => {
+  for (let slots = 2; slots <= 13; slots++) {
+    const board = createBoard(equalWidths(slots), physics.radius, []);
+    for (let row = 0; row < board.pegRows; row++) {
+      const y = board.pegTop + row * board.rowGap;
+      const xs = board.pegs.filter((p) => p.kind !== 'wall' && p.y === y).map((p) => p.x);
+      const left = xs[0];
+      const right = board.width - xs.at(-1);
+      assert.ok(Math.abs(left - right) < 1, `${slots} slots, row ${row}: ${left} to the left wall, ${right} to the right`);
+      assert.ok(left <= 129 + board.colGap / 2 + 1, `${slots} slots, row ${row}: no column missing at the edge (${left})`);
     }
   }
 });

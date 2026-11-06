@@ -110,6 +110,20 @@ export function createRenderer(canvas) {
     }
   }
 
+  // Slots sliding from where they stood to where a shuffle put them: fromX[i] is where slot i's
+  // centre was before.
+  const SLIDE_TIME = 0.45;
+  let slide = null;
+  function slideSlots(board, fromX, now) {
+    slide = { board, fromX, at: now };
+  }
+  function slideShift(board, i, now) {
+    if (!slide || slide.board !== board || now - slide.at > SLIDE_TIME) return 0;
+    const k = (now - slide.at) / SLIDE_TIME;
+    const ease = 1 - (1 - k) ** 3;
+    return (slide.fromX[i] - (board.slotEdges[i] + board.slotEdges[i + 1]) / 2) * (1 - ease);
+  }
+
   function celebrate(board, slots) {
     for (const slot of slots) {
       const x = (board.slotEdges[slot] + board.slotEdges[slot + 1]) / 2;
@@ -209,8 +223,9 @@ export function createRenderer(canvas) {
 
     // Each slot is a mat in its colour, with the place's name on a little cream sign.
     for (let i = 0; i < slotMenus.length; i++) {
-      const x0 = board.slotEdges[i];
-      const x1 = board.slotEdges[i + 1];
+      const shift = slideShift(board, i, now);
+      const x0 = board.slotEdges[i] + shift;
+      const x1 = board.slotEdges[i + 1] + shift;
       if (slotMenus[i].trigger) {
         fx.drawTriggerSlot(board, now, x0, x1);
         continue;
@@ -655,26 +670,7 @@ export function createRenderer(canvas) {
       drawBall(ball, now, spot.member, faces);
       ctx.globalAlpha = 1;
       if (faces?.loading(spot.member)) drawPhotoLoading(ball, spot.member.color, now);
-      if (picked) {
-        ctx.strokeStyle = ACCENT;
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.arc(ball.cx, ball.cy, spot.r + 7, 0, Math.PI * 2);
-        ctx.stroke();
-        const bx = ball.cx + spot.r * 0.72;
-        const by = ball.cy - spot.r * 0.72;
-        ctx.fillStyle = ACCENT;
-        ctx.beginPath();
-        ctx.arc(bx, by, 12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(bx - 5, by);
-        ctx.lineTo(bx - 1, by + 4);
-        ctx.lineTo(bx + 6, by - 4);
-        ctx.stroke();
-      }
+      if (picked) drawPickMark(ball, now);
       ctx.font = `700 ${Math.min(18, Math.round(spot.r * 0.5))}px "IBM Plex Sans KR", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
@@ -733,12 +729,21 @@ export function createRenderer(canvas) {
 
   // A picked member wears the same red ring and tick while falling as while waiting, so everyone
   // can follow the ones who count among the whole team tumbling down.
-  function drawPickMark(b) {
-    ctx.strokeStyle = ACCENT;
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(b.cx, b.cy, b.R + 7, 0, Math.PI * 2);
-    ctx.stroke();
+  // A picked member wears a rainbow ring turning round them in a soft rainbow glow, and a check
+  // badge, on the line and all the way down.
+  function drawPickMark(b, now) {
+    const segments = 24;
+    const turn = now * 2.2;
+    for (const [width, light, alpha] of [[16, 70, 0.3], [6, 56, 1]]) {
+      ctx.lineWidth = width;
+      for (let i = 0; i < segments; i++) {
+        const a = turn + (i / segments) * Math.PI * 2;
+        ctx.strokeStyle = `hsla(${(i / segments) * 360}, 95%, ${light}%, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(b.cx, b.cy, b.R + 8, a, a + (Math.PI * 2) / segments + 0.02);
+        ctx.stroke();
+      }
+    }
     const bx = b.cx + b.R * 0.72;
     const by = b.cy - b.R * 0.72;
     ctx.fillStyle = ACCENT;
@@ -791,7 +796,7 @@ export function createRenderer(canvas) {
         if (b.charged) fx.drawCharge(b, now);
         drawBall(b, now, memberOf?.(b), faces);
         if (b.charged) fx.drawChargeSparkles(b, now);
-        if (pickedOf?.(b)) drawPickMark(b);
+        if (pickedOf?.(b)) drawPickMark(b, now);
       });
     }
     fx.drawPops(now);
@@ -829,5 +834,5 @@ export function createRenderer(canvas) {
     theme = themeById(id);
   }
 
-  return { resize, draw, onEvent, celebrate, toBoard, poke, jiggle, setTheme, visible: (ball) => onScreen(camera, ball, width, height) };
+  return { resize, draw, onEvent, celebrate, slideSlots, toBoard, poke, jiggle, setTheme, visible: (ball) => onScreen(camera, ball, width, height) };
 }
