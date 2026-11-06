@@ -30,7 +30,6 @@ export const night = {
   wood: { fill: '#8f80c4', ink: '#4c3f86' },
   wall: WALL,
   poke: ['#fff3c4', '#b9c4ff'],
-  trigger: { cap: '#ff5c8a', rim: '#a3264f', glow: '#ffb3c8' },
 
   // Deep blue with faint nebulae and a field of stars.
   tile(ctx, rnd, wrapped, size) {

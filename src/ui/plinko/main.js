@@ -230,6 +230,8 @@ function onEngineEvent(event) {
   else if (event.type === 'redrop') {
     audio.redrop();
     bench.shout(phase.members[event.ball.player], 'drop', now);
+  } else if (event.type === 'open') {
+    audio.open();
   } else if (event.type === 'trigger') {
     audio.trigger(event.ball.cx, board.width);
     bench.shout(phase.members[event.ball.player], 'trigger', now);
@@ -530,7 +532,7 @@ if (new URLSearchParams(location.search).has('debug')) {
     bench: () => benchSpots().map((s) => ({ id: s.member.id, x: s.x, y: s.y, r: s.r, picked: bench.isSelected(s.member) })),
     members: () => phase.members.map((m) => m.id),
     winners: () => phase.round?.winners ?? null,
-    trigger: () => ({ slot: board.triggerSlot, pressed: phase.round?.trigger.at ?? null }),
+    trigger: () => ({ slot: board.triggerSlot, opened: phase.round?.trigger.openAt ?? null, pressed: phase.round?.trigger.at ?? null }),
     said: () => phase.members.map((m) => bench.shoutOf(m, performance.now() / 1000)?.line ?? null),
   };
 }

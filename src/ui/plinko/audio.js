@@ -128,6 +128,13 @@ export function createAudio() {
       if (muted || !ctx) return;
       voice('sawtooth', 900, 0.08, 0.35, ctx.currentTime, 0, 140);
     },
+    // The trigger slot's hatch sliding open: a low metal clank and a scrape.
+    open() {
+      if (muted || !ctx) return;
+      const now = ctx.currentTime;
+      voice('square', 110, 0.12, 0.25, now, 0, 70);
+      thump(700, 0.3, 0.12, 0);
+    },
     // The trigger slot's button: a heavy click as it goes down.
     trigger(x, boardWidth) {
       if (muted || !ctx) return;

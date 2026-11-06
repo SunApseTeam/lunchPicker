@@ -2,7 +2,7 @@ import { menuIcon } from '../../domain/icon.js';
 import { BUBBLE_FONT } from './bench.js';
 import { FRAME, cameraTarget, createCamera, followCamera, onScreen } from './camera.js';
 import { createGround } from './ground.js';
-import { createSpringFx } from './spring-fx.js';
+import { BUTTON, createSpringFx } from './spring-fx.js';
 import { hexToRgba } from './themes/art.js';
 import { themeById } from './themes/index.js';
 
@@ -84,16 +84,18 @@ export function createRenderer(canvas) {
       if (event.kind === 'bumper') burst(event.target.x, event.target.y, theme.glow, 20, 520);
     } else if (event.type === 'redrop') {
       burst(event.ball.cx, event.ball.cy, MUTED, 24, 320);
+    } else if (event.type === 'open' && board) {
+      fx.open(board, now);
     } else if (event.type === 'trigger' && board) {
       fx.press(board, now);
       const x = (board.slotEdges[board.triggerSlot] + board.slotEdges[board.triggerSlot + 1]) / 2;
-      burst(x, board.floorY - 20, theme.trigger.cap, 30, 760);
+      burst(x, board.floorY - 20, BUTTON.cap, 30, 760);
       burst(x, board.floorY - 20, '#ffffff', 16, 520);
     } else if (event.type === 'spring' && board) {
       for (let i = 0; i < board.slotEdges.length - 1; i++) {
         const x = (board.slotEdges[i] + board.slotEdges[i + 1]) / 2;
-        burst(x, board.floorY - 10, theme.trigger.cap, 14, 700);
-        burst(x, board.floorY - 10, theme.trigger.glow, 10, 520);
+        burst(x, board.floorY - 10, BUTTON.cap, 14, 700);
+        burst(x, board.floorY - 10, BUTTON.glow, 10, 520);
       }
       for (const b of event.balls) hurt(b, 1100, now);
     }
@@ -161,6 +163,8 @@ export function createRenderer(canvas) {
     const { board, closed } = world;
     for (const slot of lidAt.keys()) if (!closed.has(slot)) lidAt.delete(slot);
     for (const slot of closed) {
+      // The trigger slot has a hatch of its own, drawn with the slot.
+      if (slot === board.triggerSlot) continue;
       if (!lidAt.has(slot)) lidAt.set(slot, now);
       const shut = Math.min(1, (now - lidAt.get(slot)) / 0.25);
       const ease = 1 - (1 - shut) ** 3;
@@ -199,7 +203,7 @@ export function createRenderer(canvas) {
       const x0 = board.slotEdges[i];
       const x1 = board.slotEdges[i + 1];
       if (slotMenus[i].trigger) {
-        fx.drawTriggerSlot(board, theme, now, x0, x1);
+        fx.drawTriggerSlot(board, now, x0, x1);
         continue;
       }
       const color = SLOT_COLORS[i % SLOT_COLORS.length];
@@ -767,7 +771,7 @@ export function createRenderer(canvas) {
     }
     drawParticles(dt);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    fx.drawBanner(width, height, theme, now);
+    fx.drawBanner(width, height, now);
   }
 
   // A click on the scene at screen point (sx, sy): a ripple, a puff of petals, and the flowers,

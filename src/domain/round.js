@@ -30,11 +30,12 @@ function dropPlayer(world, player, index, spot) {
 // be picked at most once. By default every slot is its own group.
 export function createRound(board, players, rng, groups = board.slotEdges.slice(1).map((_, i) => i)) {
   const world = createWorld(board, rng, players[0].physics);
+  if (board.triggerSlot !== null) world.closed.add(board.triggerSlot);
   players.forEach((player, i) => dropPlayer(world, player, i, player.x));
   // owners: group -> the ball that claimed it.
-  // trigger: who pressed the trigger slot's button and when. It works once a round. landed: the
-  // balls that have reached a slot floor at least once.
-  return { world, players, groups, owners: new Map(), done: false, winners: null, trigger: { by: null, at: null }, landed: new Set() };
+  // trigger: when the trigger slot opened, and who pressed its button and when. It works once a
+  // round.
+  return { world, players, groups, owners: new Map(), done: false, winners: null, trigger: { openAt: null, by: null, at: null } };
 }
 
 const counts = (round, ball) => round.players[ball.player].counts !== false;
@@ -63,19 +64,25 @@ function claimPlaces(round, emit) {
     }
   }
   world.closed = new Set(groups.flatMap((group, slot) => (owners.has(group) && owners.get(group).zone !== slot ? [slot] : [])));
+  const slot = world.board.triggerSlot;
+  if (slot !== null && round.trigger.openAt === null) world.closed.add(slot);
 }
 
-// A ball dropping straight into the trigger slot from the pegs presses its button, once a round,
-// and at that very moment every ball in every slot is thrown back up, the one that pressed it
-// too. One that bounces over from another slot does not press it: that made it go off in most
-// rounds.
+// The trigger slot starts shut under a lid. It opens once the first ball comes down onto the
+// floor of another slot. From then on any ball touching its floor presses the button, however it
+// got there, once a round, and at that very moment every ball in every slot is thrown back up,
+// the one that pressed it too.
 function pressTrigger(round, emit) {
-  const { world, trigger, landed } = round;
+  const { world, trigger } = round;
   const slot = world.board.triggerSlot;
-  const fresh = world.balls.filter((b) => b.onFloor && !landed.has(b));
-  for (const b of fresh) landed.add(b);
   if (slot === null || trigger.by) return;
-  const ball = fresh.find((b) => b.zone === slot);
+  const down = world.balls.filter((b) => b.onFloor && !b.onLid);
+  if (trigger.openAt === null) {
+    if (!down.some((b) => b.zone !== slot)) return;
+    trigger.openAt = world.time;
+    emit({ type: 'open', slot });
+  }
+  const ball = down.find((b) => b.zone === slot);
   if (!ball) return;
   trigger.by = ball;
   trigger.at = world.time;
