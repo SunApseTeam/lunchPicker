@@ -727,22 +727,48 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
-  // A picked member wears the same red ring and tick while falling as while waiting, so everyone
-  // can follow the ones who count among the whole team tumbling down.
-  // A picked member wears a rainbow ring turning round them in a soft rainbow glow, and a check
-  // badge, on the line and all the way down.
+  // A picked member glows, on the line and all the way down, in a pale pastel rainbow with no
+  // hard edge: soft puffs of light in rainbow order drifting round them, each twinkling on its
+  // own, with little stars glinting among them, and a check badge.
+  const GLOW_PUFFS = 12;
   function drawPickMark(b, now) {
-    const segments = 24;
-    const turn = now * 2.2;
-    for (const [width, light, alpha] of [[16, 70, 0.3], [6, 56, 1]]) {
-      ctx.lineWidth = width;
-      for (let i = 0; i < segments; i++) {
-        const a = turn + (i / segments) * Math.PI * 2;
-        ctx.strokeStyle = `hsla(${(i / segments) * 360}, 95%, ${light}%, ${alpha})`;
-        ctx.beginPath();
-        ctx.arc(b.cx, b.cy, b.R + 8, a, a + (Math.PI * 2) / segments + 0.02);
-        ctx.stroke();
-      }
+    const reach = b.R + 40;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(b.cx, b.cy, reach, 0, Math.PI * 2);
+    ctx.arc(b.cx, b.cy, b.R, 0, Math.PI * 2, true);
+    ctx.clip();
+    const turn = now * 0.6;
+    for (let i = 0; i < GLOW_PUFFS; i++) {
+      const a = turn + (i / GLOW_PUFFS) * Math.PI * 2;
+      const x = b.cx + Math.cos(a) * (b.R + 12);
+      const y = b.cy + Math.sin(a) * (b.R + 12);
+      const twinkle = 0.5 + 0.5 * Math.sin(now * 5 + i * 2.3);
+      const hue = (i / GLOW_PUFFS) * 360;
+      const size = 26 + 6 * twinkle;
+      const puff = ctx.createRadialGradient(x, y, 0, x, y, size);
+      puff.addColorStop(0, `hsla(${hue}, 100%, 82%, ${0.45 + 0.4 * twinkle})`);
+      puff.addColorStop(1, `hsla(${hue}, 100%, 88%, 0)`);
+      ctx.fillStyle = puff;
+      ctx.fillRect(x - size, y - size, size * 2, size * 2);
+    }
+    ctx.restore();
+    // Glints: small white stars winking on and off round the glow.
+    for (let i = 0; i < 4; i++) {
+      const phase = (now * 1.3 + i * 0.25) % 1;
+      const a = Math.floor(now * 1.3 + i * 0.25) * 2.4 + i * 1.57;
+      const d = b.R + 10 + 14 * ((i * 0.37) % 1);
+      const size = 7 * Math.sin(phase * Math.PI);
+      const x = b.cx + Math.cos(a) * d;
+      const y = b.cy + Math.sin(a) * d;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * Math.sin(phase * Math.PI)})`;
+      ctx.beginPath();
+      ctx.moveTo(x, y - size);
+      ctx.quadraticCurveTo(x, y, x + size, y);
+      ctx.quadraticCurveTo(x, y, x, y + size);
+      ctx.quadraticCurveTo(x, y, x - size, y);
+      ctx.quadraticCurveTo(x, y, x, y - size);
+      ctx.fill();
     }
     const bx = b.cx + b.R * 0.72;
     const by = b.cy - b.R * 0.72;
