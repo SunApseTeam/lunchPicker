@@ -1,13 +1,13 @@
 // How the trigger slot and the glowing re-drops look, for show only: the physics is in
 // domain/round.js.
 // The trigger slot is a dark pit with a red button on its floor and nothing to say what it does.
-// It starts shut under a cover with a sleeping face, which pops off once the first member lands
-// in another slot; then the button sparkles to say it can be pressed. When it is pressed it slams
-// flat with a flash and a ring, every slot's floor kicks up on its spring and wobbles back, the
-// screen shakes hard and "혼란!" pops up across it. Then the button goes grey and the cover drops
-// back on, its face knocked out cold.
-// A member dropped again sparkles all the way down, and anyone not deciding that they touch
-// bursts with a bang.
+// It starts shut under a glass cover, like an alarm button's, which flips open once the first
+// member lands in another slot; then the button blinks and sparkles to say it can be pressed.
+// When it is pressed it slams flat with a flash and a ring, every slot's floor kicks up on its
+// spring and wobbles back, the screen shakes hard and "혼란!" pops up across it. Then the button
+// goes grey and the glass cover slams shut again.
+// A member dropped again glows gold behind a ring of spikes all the way down, and anyone not
+// deciding that they touch bursts with a bang.
 import { hexToRgba } from './themes/art.js';
 
 const BANNER_TIME = 1.4;
@@ -15,11 +15,11 @@ const INK = '#1c1d26';
 // The button is red on every map: it should look like something you must not press.
 export const BUTTON = { cap: '#e3262b', rim: '#6e0d10', glow: '#ff4d42' };
 const DEAD = { cap: '#8a8a8f', rim: '#4a4a50' };
-// The cover: a plum shell, cute and a little sinister, unlike the wooden lids.
-const COVER = { shell: '#7b1d3a', light: '#c2456b', cheek: '#ff8fb1' };
 const OPEN_TIME = 0.35;
-// The cover drops back on this long after the press, landing as the round covers the slot.
-const COVER_DROP = [0.3, 0.5];
+// The glass cover swings shut this long after the press, landing as the round covers the slot.
+const COVER_SHUT = [0.3, 0.5];
+// How far the glass cover swings up on its hinge when open.
+const COVER_SWING = 1.9;
 const POP_TIME = 0.7;
 
 export function createSpringFx(ctx) {
@@ -150,11 +150,25 @@ export function createSpringFx(ctx) {
     ctx.roundRect(cx - r - 8, floor - 8, (r + 8) * 2, 12, 6);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = BUTTON.cap;
+    // Armed, the dome lights up from inside and blinks like an alarm lamp.
+    const blink = armed ? 0.5 + 0.5 * Math.sin(now * 10) : 0;
+    if (armed) {
+      const lit = ctx.createRadialGradient(cx - r * 0.2, floor - 8 - height * 0.5, 2, cx, floor - 8, r);
+      lit.addColorStop(0, `rgba(255, 236, 214, ${0.55 + 0.45 * blink})`);
+      lit.addColorStop(0.45, hexToRgba(BUTTON.glow, 0.95));
+      lit.addColorStop(1, BUTTON.cap);
+      ctx.fillStyle = lit;
+      ctx.shadowColor = hexToRgba(BUTTON.glow, 0.9);
+      ctx.shadowBlur = 18 + 26 * blink;
+    } else {
+      ctx.fillStyle = BUTTON.cap;
+    }
     ctx.beginPath();
     ctx.ellipse(cx, floor - 8, r, height, 0, Math.PI, 0);
     ctx.closePath();
     ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
     if (dead > 0) {
       ctx.fillStyle = hexToRgba(DEAD.cap, dead);
       ctx.fill();
@@ -167,116 +181,102 @@ export function createSpringFx(ctx) {
       ctx.fill();
     }
     if (armed) {
-      // Pressable: the dome shimmers and twinkles dance round it.
-      const shine = 0.5 + 0.5 * Math.sin(now * 7);
-      ctx.fillStyle = `rgba(255, 240, 200, ${0.25 * shine})`;
-      ctx.beginPath();
-      ctx.ellipse(cx, floor - 8, r, height, 0, Math.PI, 0);
-      ctx.fill();
-      twinkles(cx, floor - 8 - height * 0.5, r * 1.1, now, 6);
+      // Pressable: light shoots up off the dome and twinkles flicker on and over it.
+      const top = floor - 8 - height;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 7; i++) {
+        const a = Math.PI * (1.12 + (i / 6) * 0.76);
+        const len = r * (0.45 + 0.35 * blink) * (i % 2 ? 0.7 : 1);
+        const from = r * 0.25;
+        ctx.strokeStyle = `rgba(255, 220, 120, ${0.35 + 0.55 * blink})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * (r + from), top + height * 0.4 + Math.sin(a) * (height + from));
+        ctx.lineTo(cx + Math.cos(a) * (r + from + len), top + height * 0.4 + Math.sin(a) * (height + from + len));
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+      twinkles(cx, floor - 8 - height * 0.55, r * 0.55, now * 1.3, 4);
+      twinkles(cx, floor - 8 - height * 0.5, r * 1.15, now, 6);
     }
 
     drawCover(board, now, x0, x1);
   }
 
-  // The cover over the slot's mouth: a plum shell with a little face, asleep until the slot
-  // opens, then knocked out cold once the button has gone off. It pops up and away when the slot
-  // opens and drops back on with a bounce after the press.
+  // The glass cover over the slot's mouth, hinged on its left like an alarm button's. It swings
+  // up and away when the slot opens, and slams back down after the press.
   function drawCover(board, now, x0, x1) {
     const openAt = openedAt.get(board);
     const pressAt = pressedAt.get(board);
-    let lift = 0;
+    // swing: 0 shut, 1 fully up. alpha fades it out once it is up.
+    let swing = 0;
     let alpha = 1;
-    let knocked = false;
+    let slammed = null;
     if (pressAt !== undefined) {
       const t = now - pressAt;
-      if (t < COVER_DROP[0]) return;
-      const k = Math.min(1, (t - COVER_DROP[0]) / (COVER_DROP[1] - COVER_DROP[0]));
-      const after = t - COVER_DROP[1];
-      lift = k < 1 ? -140 * (1 - k * k) : -10 * Math.exp(-8 * after) * Math.abs(Math.cos(after * 18));
-      knocked = true;
+      if (t < COVER_SHUT[0]) return;
+      const k = Math.min(1, (t - COVER_SHUT[0]) / (COVER_SHUT[1] - COVER_SHUT[0]));
+      swing = 1 - k * k;
+      alpha = Math.min(1, k * 3);
+      if (k >= 1) slammed = t - COVER_SHUT[1];
     } else if (openAt !== undefined) {
       const k = (now - openAt) / OPEN_TIME;
       if (k >= 1) return;
-      lift = -120 * k;
-      alpha = 1 - k;
+      swing = 1 - (1 - k) ** 2;
+      alpha = 1 - k * k;
     }
+    // A little rebound just after it slams shut.
+    if (slammed !== null && slammed < 0.4) swing = 0.06 * Math.exp(-9 * slammed) * Math.abs(Math.sin(slammed * 20));
     const w = x1 - x0;
-    const cx = (x0 + x1) / 2;
-    const y = board.lidY - 14 + lift;
-    const h = 30;
+    const y = board.lidY - 12;
+    const h = 22;
+    const hingeX = x0 + 2;
     ctx.save();
     ctx.globalAlpha = alpha;
-    // The pit under the cover darkens.
-    if (lift > -20) {
-      ctx.fillStyle = 'rgba(20, 10, 14, 0.35)';
-      ctx.fillRect(x0 + 5, board.dividerTop, w - 10, board.floorY - board.dividerTop);
-    }
-    const shell = ctx.createLinearGradient(0, y, 0, y + h);
-    shell.addColorStop(0, COVER.light);
-    shell.addColorStop(1, COVER.shell);
-    ctx.fillStyle = shell;
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.5;
+    ctx.translate(hingeX, y + h / 2);
+    ctx.rotate(-swing * COVER_SWING);
+    ctx.translate(-hingeX, -(y + h / 2));
+    // The glass: clear with a faint blue tint, a bright rim and a dark outline.
+    const glass = ctx.createLinearGradient(0, y, 0, y + h);
+    glass.addColorStop(0, 'rgba(230, 246, 255, 0.55)');
+    glass.addColorStop(1, 'rgba(170, 214, 240, 0.25)');
+    ctx.fillStyle = glass;
     ctx.beginPath();
-    ctx.roundRect(x0 - 2, y, w + 4, h, [14, 14, 8, 8]);
+    ctx.roundRect(x0 - 2, y, w + 4, h, [12, 12, 6, 6]);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(40, 60, 90, 0.55)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x0 + 1, y + 2, w - 2, h - 4, [10, 10, 4, 4]);
+    ctx.stroke();
+    // Shine streaks across the glass.
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x0 + w * 0.22, y + h - 5);
+    ctx.lineTo(x0 + w * 0.32, y + 5);
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x0 + w * 0.36, y + h - 6);
+    ctx.lineTo(x0 + w * 0.42, y + 6);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+    // The hinge.
+    ctx.fillStyle = '#5b6573';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x0 - 4, y + h / 2 - 6, 10, 12, 3);
     ctx.fill();
     ctx.stroke();
-    // Rivets at the ends.
-    ctx.fillStyle = '#f3d6df';
-    for (const rx of [x0 + 9, x1 - 9]) {
-      ctx.beginPath();
-      ctx.arc(rx, y + h / 2, 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // The face.
-    const ey = y + h * 0.45;
-    const gap = Math.min(16, w * 0.15);
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    for (const side of [-1, 1]) {
-      const ex = cx + side * gap;
-      ctx.beginPath();
-      if (knocked) {
-        ctx.moveTo(ex - 4, ey - 4);
-        ctx.lineTo(ex + 4, ey + 4);
-        ctx.moveTo(ex + 4, ey - 4);
-        ctx.lineTo(ex - 4, ey + 4);
-      } else {
-        ctx.arc(ex, ey - 2, 4.5, 0.15 * Math.PI, 0.85 * Math.PI);
-      }
-      ctx.stroke();
-      ctx.fillStyle = hexToRgba(COVER.cheek, 0.8);
-      ctx.beginPath();
-      ctx.ellipse(ex + side * 7, ey + 6, 4, 2.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.beginPath();
-    if (knocked) {
-      // A little tongue sticking out.
-      ctx.moveTo(cx - 4, ey + 6);
-      ctx.lineTo(cx + 4, ey + 6);
-      ctx.stroke();
-      ctx.fillStyle = COVER.cheek;
-      ctx.beginPath();
-      ctx.ellipse(cx + 1, ey + 9, 3, 3.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.arc(cx, ey + 4, 3, 0.2 * Math.PI, 0.8 * Math.PI);
-      ctx.stroke();
-      // Asleep, for now.
-      ctx.fillStyle = INK;
-      ctx.font = '700 13px "IBM Plex Sans KR", sans-serif';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
-      const bob = Math.sin(now * 2) * 2;
-      ctx.fillText('z', x1 - 22, y - 4 + bob);
-      ctx.font = '700 10px "IBM Plex Sans KR", sans-serif';
-      ctx.fillText('z', x1 - 13, y - 13 + bob);
-    }
-    ctx.lineCap = 'butt';
     ctx.restore();
+    // A glint off the glass as it slams shut.
+    if (slammed !== null && slammed < 0.25) twinkles((x0 + x1) / 2, y + h / 2, w * 0.4, now * 3, 3, '#ffffff');
   }
 
   // Every slot's floor kicking up on its spring and wobbling back, once the button is pressed.
@@ -314,17 +314,39 @@ export function createSpringFx(ctx) {
     }
   }
 
-  // A member dropped again: a golden halo pulsing round them and twinkles all about, to say they
-  // will burst whoever is in their way. Drawn under the ball.
+  // A member dropped again: a golden halo pulsing round them behind a turning ring of sharp
+  // spikes, to say they will burst whoever is in their way. Drawn under the ball.
   function drawCharge(b, now) {
     const pulse = 0.5 + 0.5 * Math.sin(now * 9);
-    const halo = ctx.createRadialGradient(b.cx, b.cy, b.R * 0.8, b.cx, b.cy, b.R * (1.6 + 0.2 * pulse));
-    halo.addColorStop(0, `rgba(255, 214, 90, ${0.75})`);
-    halo.addColorStop(1, 'rgba(255, 214, 90, 0)');
+    const halo = ctx.createRadialGradient(b.cx, b.cy, b.R * 0.8, b.cx, b.cy, b.R * (1.7 + 0.2 * pulse));
+    halo.addColorStop(0, 'rgba(255, 190, 60, 0.8)');
+    halo.addColorStop(1, 'rgba(255, 120, 40, 0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(b.cx, b.cy, b.R * 1.9, 0, Math.PI * 2);
+    ctx.arc(b.cx, b.cy, b.R * 2, 0, Math.PI * 2);
     ctx.fill();
+    const spikes = 14;
+    const turn = now * 1.8;
+    const base = b.R - 2;
+    const tip = b.R + 20 + 4 * pulse;
+    const half = Math.PI / spikes;
+    ctx.beginPath();
+    for (let i = 0; i < spikes; i++) {
+      const a = turn + (i / spikes) * Math.PI * 2;
+      ctx.moveTo(b.cx + Math.cos(a - half) * base, b.cy + Math.sin(a - half) * base);
+      ctx.lineTo(b.cx + Math.cos(a) * tip, b.cy + Math.sin(a) * tip);
+      ctx.lineTo(b.cx + Math.cos(a + half) * base, b.cy + Math.sin(a + half) * base);
+    }
+    const steel = ctx.createRadialGradient(b.cx, b.cy, base, b.cx, b.cy, tip);
+    steel.addColorStop(0, '#ffe08a');
+    steel.addColorStop(1, '#ff7a1a');
+    ctx.fillStyle = steel;
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.lineJoin = 'miter';
   }
 
   // Twinkles over a glowing member, drawn on top of the ball.

@@ -670,26 +670,7 @@ export function createRenderer(canvas) {
       drawBall(ball, now, spot.member, faces);
       ctx.globalAlpha = 1;
       if (faces?.loading(spot.member)) drawPhotoLoading(ball, spot.member.color, now);
-      if (picked) {
-        ctx.strokeStyle = ACCENT;
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.arc(ball.cx, ball.cy, spot.r + 7, 0, Math.PI * 2);
-        ctx.stroke();
-        const bx = ball.cx + spot.r * 0.72;
-        const by = ball.cy - spot.r * 0.72;
-        ctx.fillStyle = ACCENT;
-        ctx.beginPath();
-        ctx.arc(bx, by, 12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(bx - 5, by);
-        ctx.lineTo(bx - 1, by + 4);
-        ctx.lineTo(bx + 6, by - 4);
-        ctx.stroke();
-      }
+      if (picked) drawPickMark(ball, now);
       ctx.font = `700 ${Math.min(18, Math.round(spot.r * 0.5))}px "IBM Plex Sans KR", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
@@ -748,12 +729,21 @@ export function createRenderer(canvas) {
 
   // A picked member wears the same red ring and tick while falling as while waiting, so everyone
   // can follow the ones who count among the whole team tumbling down.
-  function drawPickMark(b) {
-    ctx.strokeStyle = ACCENT;
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(b.cx, b.cy, b.R + 7, 0, Math.PI * 2);
-    ctx.stroke();
+  // A picked member wears a rainbow ring turning round them in a soft rainbow glow, and a check
+  // badge, on the line and all the way down.
+  function drawPickMark(b, now) {
+    const segments = 24;
+    const turn = now * 2.2;
+    for (const [width, light, alpha] of [[16, 70, 0.3], [6, 56, 1]]) {
+      ctx.lineWidth = width;
+      for (let i = 0; i < segments; i++) {
+        const a = turn + (i / segments) * Math.PI * 2;
+        ctx.strokeStyle = `hsla(${(i / segments) * 360}, 95%, ${light}%, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(b.cx, b.cy, b.R + 8, a, a + (Math.PI * 2) / segments + 0.02);
+        ctx.stroke();
+      }
+    }
     const bx = b.cx + b.R * 0.72;
     const by = b.cy - b.R * 0.72;
     ctx.fillStyle = ACCENT;
@@ -806,7 +796,7 @@ export function createRenderer(canvas) {
         if (b.charged) fx.drawCharge(b, now);
         drawBall(b, now, memberOf?.(b), faces);
         if (b.charged) fx.drawChargeSparkles(b, now);
-        if (pickedOf?.(b)) drawPickMark(b);
+        if (pickedOf?.(b)) drawPickMark(b, now);
       });
     }
     fx.drawPops(now);
