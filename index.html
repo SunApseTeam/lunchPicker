@@ -562,14 +562,12 @@
       </button>
     </header>
     <div class="rows">
-      <label class="row"><span>구슬 크기</span><output id="set-size-v"></output>
-        <input id="set-size" type="range" min="24" max="56"><small id="size-note"></small></label>
-      <label class="row"><span>말랑함</span><output id="set-softness-v"></output>
-        <input id="set-softness" type="range" min="0" max="100"></label>
-      <label class="row"><span>탄력</span><output id="set-bounce-v"></output>
-        <input id="set-bounce" type="range" min="0" max="100"></label>
       <label class="toggle"><span>소리</span>
         <input id="set-sound" type="checkbox"><i aria-hidden="true"></i></label>
+      <label class="row"><span>속도</span><output id="set-speed-v"></output>
+        <input id="set-speed" type="range" min="0" step="1"><small>공이 떨어지는 빠르기. 떨어지는 중에도 바로 바뀌어요.</small></label>
+      <label class="row"><span>혼란 버튼 열리는 시간</span><output id="set-chaos-v"></output>
+        <input id="set-chaos" type="range" min="0" step="1"><small>첫 공이 칸 바닥에 닿은 뒤 이만큼 지나야 혼란 버튼 덮개가 열려요. 다음 판부터 적용돼요.</small></label>
     </div>
     <footer class="dialog-foot">
       <button id="settings-reset">기본값으로</button>

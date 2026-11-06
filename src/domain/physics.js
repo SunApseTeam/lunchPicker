@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from './settings.js';
+import { BALL } from './settings.js';
 
 // Soft-body Plinko. Each ball is a ring of points kept round by skin, pressure and
 // shape-matching constraints (position-based dynamics), so it squishes against pegs.
@@ -217,7 +217,7 @@ export const FIXED_BUMPERS = [
 ];
 
 // triggerSlot: which slot is the spring trigger's, or none. See slotWidthsWithTrigger.
-export function createBoard(slotWidths, radius = DEFAULT_SETTINGS.size, bumpers = FIXED_BUMPERS, triggerSlot = null) {
+export function createBoard(slotWidths, radius = BALL.size, bumpers = FIXED_BUMPERS, triggerSlot = null) {
   const g = GEOMETRY;
   const width = boardWidth(slotWidths.length);
   const total = slotWidths.reduce((a, b) => a + b, 0);
@@ -294,7 +294,7 @@ export function slotAt(board, x) {
   return e.length - 2;
 }
 
-export function createWorld(board, rng, physics = physicsFrom(DEFAULT_SETTINGS)) {
+export function createWorld(board, rng, physics = physicsFrom(BALL)) {
   // closed: empty slots with a lid over them. The round decides which.
   return { board, rng, physics, time: 0, balls: [], nextId: 1, touching: new Set(), closed: new Set(), endgame: false };
 }

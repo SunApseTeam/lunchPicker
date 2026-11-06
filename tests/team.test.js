@@ -1,15 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_SETTINGS } from '../src/domain/settings.js';
+import { BALL } from '../src/domain/settings.js';
 import { DT, boardWidth, createBoard, equalWidths, mulberry32, randomBumpers } from '../src/domain/physics.js';
 import { createRound, stepRound } from '../src/domain/round.js';
 import { DEFAULT_TEAM as TEAM, SITUATIONS, memberPhysics, parseMember } from '../src/domain/team.js';
 import { createLunchService } from '../src/application/lunch.js';
 
 test('every member fits the board the settings size was built for', () => {
-  for (const size of [24, 40, DEFAULT_SETTINGS.size, 56]) {
+  for (const size of [24, 40, BALL.size, 56]) {
     for (const m of TEAM) {
-      const r = memberPhysics({ ...DEFAULT_SETTINGS, size }, m).radius;
+      const r = memberPhysics({ ...BALL, size }, m).radius;
       assert.ok(r <= size && r >= size * 0.9 - 1, `${m.id} at size ${size}: ${r}`);
     }
   }
@@ -25,9 +25,9 @@ test('a mixed team drops from its spots, lands in distinct places and finishes',
     const n = 4 + (round % 4);
     const k = 1 + (round % 3);
     const chosen = [...TEAM].sort(() => rng() - 0.5).slice(0, k);
-    const board = createBoard(equalWidths(n), DEFAULT_SETTINGS.size, randomBumpers(rng, boardWidth(n)));
+    const board = createBoard(equalWidths(n), BALL.size, randomBumpers(rng, boardWidth(n)));
     const spots = chosen.map((_, i) => ((i + 1) * board.width) / (k + 1));
-    const players = chosen.map((m, i) => ({ physics: memberPhysics(DEFAULT_SETTINGS, m), x: spots[i] }));
+    const players = chosen.map((m, i) => ({ physics: memberPhysics(BALL, m), x: spots[i] }));
     const r = createRound(board, players, rng);
     r.world.balls.forEach((b, i) => assert.equal(Math.round(b.cx), Math.round(spots[i]), 'drops where it waited'));
     for (let i = 0; i < 60 / DT && !r.done; i++) stepRound(r);
@@ -60,10 +60,10 @@ test('when the whole team votes, every ball, at its member’s size and bounce, 
   for (let round = 0; round < 8; round++) {
     const n = TEAM.length;
     const k = 1 + (round % 3);
-    const board = createBoard(equalWidths(n), DEFAULT_SETTINGS.size, randomBumpers(rng, boardWidth(n)));
+    const board = createBoard(equalWidths(n), BALL.size, randomBumpers(rng, boardWidth(n)));
     const wins = [...Array(n).keys()].sort(() => rng() - 0.5).slice(0, k).sort((a, b) => a - b);
     const step = board.width / n;
-    const players = TEAM.map((m, i) => ({ physics: memberPhysics(DEFAULT_SETTINGS, m), x: step * (i + 0.5) }));
+    const players = TEAM.map((m, i) => ({ physics: memberPhysics(BALL, m), x: step * (i + 0.5) }));
     const r = createRound(board, players, rng, wins);
     for (let i = 0; i < 90 / DT && !r.done; i++) stepRound(r);
     assert.ok(r.done, `round ${round} (${k} winning of ${n}) finished`);
