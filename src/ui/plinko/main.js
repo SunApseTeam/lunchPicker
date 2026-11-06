@@ -543,6 +543,23 @@ function vote(member, menuId) {
 
 const votePicker = createVotePicker({
   onVote: vote,
+  // A name nobody has on the list yet: added as a place and voted for in one go.
+  async onAdd(member, name) {
+    if (!leaveResult()) return;
+    let added = null;
+    const ok = await attempt(async () => {
+      added = await lunch.addMenu(name);
+    });
+    await refreshMenus();
+    if (ok) vote(member, added.id);
+  },
+  // A hidden place's name: brought back onto the list and voted for.
+  async onRevive(member, id) {
+    if (!leaveResult()) return;
+    const ok = await attempt(() => lunch.setMenuHidden(id, false));
+    await refreshMenus();
+    if (ok) vote(member, id);
+  },
   onCount(member, delta) {
     if (!leaveResult()) return;
     votes = countVotes(votes, member.id, delta);
