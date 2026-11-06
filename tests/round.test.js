@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_SETTINGS } from '../src/domain/settings.js';
+import { BALL } from '../src/domain/settings.js';
 import {
   DT,
   GEOMETRY,
@@ -23,7 +23,7 @@ import { createRound, stepRound } from '../src/domain/round.js';
 
 const slotsOf = (round) => round.winners.map((w) => w.slot);
 
-const physics = physicsFrom(DEFAULT_SETTINGS);
+const physics = physicsFrom(BALL);
 const players = (k, phys = physics) => Array.from({ length: k }, () => ({ physics: phys }));
 
 function runRound(n, k, seed, maxSeconds, widths = equalWidths(n), phys = physics) {
@@ -94,7 +94,7 @@ test('no ball gets into a closed slot: one coming down on a lid slides off to an
 
 test('a single drop settles within 20 simulated seconds, at the softest and the firmest setting', () => {
   for (const softness of [100, 0]) {
-    const phys = physicsFrom({ ...DEFAULT_SETTINGS, softness });
+    const phys = physicsFrom({ ...BALL, softness });
     for (let seed = 1; seed <= 40; seed++) {
       const { round } = runRound(8, 1, seed, 20, equalWidths(8), phys);
       assert.ok(round.done, `softness ${softness} drop ${seed} settled`);
@@ -103,7 +103,7 @@ test('a single drop settles within 20 simulated seconds, at the softest and the 
 });
 
 test('the candidate cap keeps every slot beside the trigger slot wide enough for a ball', () => {
-  assert.equal(maxSlots(DEFAULT_SETTINGS.size), 8);
+  assert.equal(maxSlots(BALL.size), 8);
   for (let size = 24; size <= 56; size += 4) {
     const n = maxSlots(size);
     const room = (GEOMETRY.width - triggerWidth(size)) / n;
@@ -281,6 +281,26 @@ test('the trigger slot opens when the first ball lands elsewhere, then is presse
     assert.ok(springs[0].balls.includes(presses[0].ball), `seed ${seed}: the one who pressed it is thrown up too`);
   }
   assert.ok(pressedRounds >= 4, `pressed in ${pressedRounds} of 12 rounds`);
+});
+
+test('with a chaos delay, the trigger slot opens that long after the first landing, not before', () => {
+  for (const delay of [2, 5]) {
+    const at = 1;
+    const board = createBoard(slotWidthsWithTrigger(3, physics.radius, at), physics.radius, [], at);
+    // One ball more than there are places, so the round runs on until the slot opens.
+    const round = createRound(board, [0.2, 0.5, 0.8, 0.9].map((f) => ({ physics, x: board.width * f })), mulberry32(delay), null, { chaosDelay: delay });
+    let landed = null;
+    let opened = null;
+    for (let i = 0; i < 30 / DT && opened === null; i++) {
+      stepRound(round, (e) => {
+        if (e.type === 'open') opened = round.world.time;
+      });
+      if (landed === null && round.world.balls.some((b) => b.onFloor && !b.onLid && b.zone !== at)) landed = round.world.time;
+      if (opened === null) assert.ok(round.world.closed.has(at), `delay ${delay}: still shut at ${round.world.time.toFixed(2)}s`);
+    }
+    assert.ok(opened !== null, `delay ${delay}: opened`);
+    assert.ok(Math.abs(opened - landed - delay) < 0.05, `delay ${delay}: landed at ${landed.toFixed(2)}s, opened at ${opened.toFixed(2)}s`);
+  }
 });
 
 test('once open, the button reaches past the slot mouth: a ball just above it presses it, and the slot is covered soon after', () => {

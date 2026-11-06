@@ -3,7 +3,7 @@ import { todayString } from '../../domain/date.js';
 import { DT, boardWidth, createBoard, maxSlots, mulberry32, randomBumpers, slotWidthsWithTrigger } from '../../domain/physics.js';
 import { createRound, stepAfter, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
-import { DEFAULT_SETTINGS } from '../../domain/settings.js';
+import { BALL, DEFAULT_SETTINGS } from '../../domain/settings.js';
 import { DEFAULT_TEAM, memberPhysics, parseMember } from '../../domain/team.js';
 import { ballsOf, castVote, countVotes, dropVote, firstStage, maxWant, nextStage, tally, voteProblem } from '../../domain/votes.js';
 import { loadSettings, saveSettings } from '../../infrastructure/settings-storage.js';
@@ -80,7 +80,7 @@ let votes = new Map();
 let want = 1;
 const wantNow = () => Math.min(want, maxWant(votes));
 const ballCount = () => [...votes.values()].reduce((n, v) => n + v.count, 0);
-const votesReady = () => !voteProblem(votes, maxSlots(settings.size));
+const votesReady = () => !voteProblem(votes, maxSlots(BALL.size));
 
 // What each slot on the board is, left to right: { kind: 'win' | 'lose' | 'trigger' | 'wait' }, a
 // slot per ball and among them the spring trigger's, which is nobody's. 'wait' slots stand in
@@ -99,7 +99,7 @@ function layOut(n, k) {
   const at = Math.floor(draw() * (n + 1));
   const kinds = shuffle(Array.from({ length: n }, (_, i) => (k === 0 ? 'wait' : i < k ? 'win' : 'lose')), draw);
   slots = [...kinds.slice(0, at), 'trigger', ...kinds.slice(at)].map((kind) => ({ kind }));
-  board = createBoard(slotWidthsWithTrigger(n, settings.size, at), settings.size, bumpers, at);
+  board = createBoard(slotWidthsWithTrigger(n, BALL.size, at), BALL.size, bumpers, at);
 }
 layOut(2, 0);
 
@@ -124,7 +124,7 @@ let timeScale = 1;
 let accumulator = 0;
 let saving = false;
 
-const benchSpots = () => bench.spots(board, (m) => memberPhysics(settings, m).radius);
+const benchSpots = () => bench.spots(board, (m) => memberPhysics(BALL, m).radius);
 
 function shuffle(list, rng = Math.random) {
   const a = [...list];
@@ -188,9 +188,9 @@ function play(stage, voters) {
   accumulator = 0;
   const spots = benchSpots();
   const spotOf = (m) => spots.find((s) => s.member.id === m.id);
-  const players = stage.balls.map((b) => ({ physics: memberPhysics(settings, b.member), x: spotOf(b.member).x }));
+  const players = stage.balls.map((b) => ({ physics: memberPhysics(BALL, b.member), x: spotOf(b.member).x }));
   const wins = slots.flatMap((s, i) => (s.kind === 'win' ? [i] : []));
-  const round = createRound(board, players, Math.random, wins);
+  const round = createRound(board, players, Math.random, wins, { chaosDelay: settings.chaosDelay });
   // Where each one really starts (on the board, clear of the others) versus where they stood.
   const now = performance.now() / 1000;
   hop = {
@@ -316,7 +316,7 @@ function frame(nowMs) {
   if (phase.name === 'running') {
     slowmo = inFinale(phase.round);
     timeScale += ((slowmo ? SLOWMO_SCALE : 1) - timeScale) * (1 - Math.exp(-6 * dt));
-    accumulator += dt * timeScale;
+    accumulator += dt * timeScale * settings.speed;
     for (let steps = 0; accumulator >= DT && steps < 40 && phase.name === 'running'; steps++) {
       stepRound(phase.round, onEngineEvent);
       accumulator -= DT;
@@ -326,7 +326,7 @@ function frame(nowMs) {
   }
   // After a round, the ones who did not win keep tumbling down to rest.
   if (phase.name === 'result' || phase.name === 'between') {
-    accumulator += dt;
+    accumulator += dt * settings.speed;
     for (let steps = 0; accumulator >= DT && steps < 40; steps++) {
       stepAfter(phase.round);
       accumulator -= DT;
@@ -352,7 +352,7 @@ function frame(nowMs) {
     view: { mode: phase.name === 'between' ? 'result' : phase.name, slowmo },
     now,
     dt,
-    bench: { spots, bounds, dragged: press?.at ? { member: press.member, ...press.at } : null, voteOf, speeches: bench.chatter(now, spots, away, bounds), away, shoutOf: bench.shoutOf, loading: loading.team, radius: settings.size },
+    bench: { spots, bounds, step: spots.length > 1 ? spots[1].x - spots[0].x : board.width, dragged: press?.at ? { member: press.member, ...press.at } : null, voteOf, speeches: bench.chatter(now, spots, away, bounds), away, shoutOf: bench.shoutOf, loading: loading.team, radius: BALL.size },
     liftOf,
     memberOf: (ball) => ballOf(ball)?.member,
     menuOf: (ball) => (ballOf(ball) ? menuById(ballOf(ball).menuId) : null),
@@ -363,7 +363,7 @@ function frame(nowMs) {
 function dropProblem() {
   if (loading.menus) return '가게 목록을 불러오는 중이에요';
   if (loading.team) return '팀원을 불러오는 중이에요';
-  return voteProblem(votes, maxSlots(settings.size));
+  return voteProblem(votes, maxSlots(BALL.size));
 }
 
 function renderControls() {
@@ -496,13 +496,11 @@ const tagEditor = createTagEditor({
 });
 
 function applySettings(next) {
-  const sizeChanged = next.size !== settings.size;
   settings = next;
   saveSettings(settings);
   audio.setMuted(!settings.sound);
   renderer.setTheme(settings.theme);
   renderThemes();
-  if (sizeChanged) rebuildBoard();
   settingsDialog.render();
   renderControls();
 }
@@ -510,7 +508,6 @@ function applySettings(next) {
 const settingsDialog = createSettingsDialog({
   settings: () => settings,
   onChange: applySettings,
-  sizeNote: (s) => `이 크기로는 공을 최대 ${maxSlots(s.size)}개까지 떨어뜨릴 수 있어요. 다음 판부터 적용돼요.`,
 });
 
 // The map theme buttons on the board: the picked one shows its name.

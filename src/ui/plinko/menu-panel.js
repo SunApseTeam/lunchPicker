@@ -43,7 +43,7 @@ export function createMenuPanel({ onRename, onHide, onUnhide, onAdd, onIcon, onT
         const name =
           editingId === m.id
             ? `<input class="rename" data-id="${m.id}" value="${escapeHtml(m.name)}" maxlength="20" aria-label="가게 이름 수정">`
-            : `<button class="name" data-action="edit" data-id="${m.id}" title="눌러서 이름 수정">${escapeHtml(m.name)}</button>`;
+            : `<button class="name" data-action="edit" data-id="${m.id}" aria-describedby="name-tip">${escapeHtml(m.name)}</button>`;
         const tags = m.tags.length
           ? `<button class="row-tags" data-action="tags" data-id="${m.id}" title="태그 편집">${m.tags.map((t) => `<span>#${escapeHtml(t)}</span>`).join('')}</button>`
           : '';
@@ -71,6 +71,30 @@ export function createMenuPanel({ onRename, onHide, onUnhide, onAdd, onIcon, onT
     }
   }
 
+  // One fixed-position tip shared by every name: the list scrolls, so a per-row tip would be clipped.
+  const tip = document.createElement('div');
+  tip.id = 'name-tip';
+  tip.role = 'tooltip';
+  tip.hidden = true;
+  tip.textContent = '이름 바꾸려면 더블클릭';
+  document.body.append(tip);
+
+  function showTip(btn) {
+    tip.hidden = false;
+    const r = btn.getBoundingClientRect();
+    const half = tip.offsetWidth / 2;
+    const x = Math.min(Math.max(r.left + r.width / 2, half + 8), window.innerWidth - half - 8);
+    const below = r.top < tip.offsetHeight + 12;
+    tip.style.left = `${x}px`;
+    tip.style.top = `${below ? r.bottom + 6 : r.top - tip.offsetHeight - 6}px`;
+  }
+
+  function startRename(id) {
+    tip.hidden = true;
+    editingId = id;
+    render();
+  }
+
   function commitRename(input) {
     editingId = null;
     onRename(input.dataset.id, input.value);
@@ -79,10 +103,7 @@ export function createMenuPanel({ onRename, onHide, onUnhide, onAdd, onIcon, onT
   $('#menu-list').addEventListener('click', (e) => {
     const target = e.target.closest('[data-action]');
     if (!target) return;
-    if (target.dataset.action === 'edit') {
-      editingId = target.dataset.id;
-      render();
-    } else if (target.dataset.action === 'hide') {
+    if (target.dataset.action === 'hide') {
       onHide(target.dataset.id);
     } else if (target.dataset.action === 'icon') {
       onIcon(last.menus.find((m) => m.id === target.dataset.id));
@@ -91,7 +112,31 @@ export function createMenuPanel({ onRename, onHide, onUnhide, onAdd, onIcon, onT
     }
   });
 
+  $('#menu-list').addEventListener('dblclick', (e) => {
+    const target = e.target.closest('[data-action="edit"]');
+    if (target) startRename(target.dataset.id);
+  });
+
+  const nameOf = (e) => e.target.closest?.('button.name');
+  $('#menu-list').addEventListener('pointerover', (e) => {
+    const btn = nameOf(e);
+    if (btn) showTip(btn);
+  });
+  $('#menu-list').addEventListener('pointerout', (e) => {
+    if (nameOf(e)) tip.hidden = true;
+  });
+  $('#menu-list').addEventListener('focusin', (e) => {
+    const btn = nameOf(e);
+    if (btn && btn.matches(':focus-visible')) showTip(btn);
+  });
+  $('#menu-list').addEventListener('scroll', () => { tip.hidden = true; }, true);
+
   $('#menu-list').addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === 'F2') && e.target.matches('[data-action="edit"]')) {
+      e.preventDefault();
+      startRename(e.target.dataset.id);
+      return;
+    }
     if (!e.target.classList.contains('rename')) return;
     if (e.key === 'Enter') commitRename(e.target);
     if (e.key === 'Escape') {
@@ -101,6 +146,7 @@ export function createMenuPanel({ onRename, onHide, onUnhide, onAdd, onIcon, onT
   });
 
   $('#menu-list').addEventListener('focusout', (e) => {
+    if (nameOf(e)) tip.hidden = true;
     if (e.target.classList.contains('rename') && editingId) commitRename(e.target);
   });
 

@@ -36,15 +36,16 @@ function dropPlayer(world, player, index, spot) {
 
 // players: one { physics, x? } per ball. Every slot holds one ball. wins lists the slots that
 // win: the round is over once every one of them is taken. Without it, every ball wins the slot
-// it takes, and the round is over once each has one.
-export function createRound(board, players, rng, wins = null) {
+// it takes, and the round is over once each has one. chaosDelay: seconds from the first landing
+// to the trigger slot opening.
+export function createRound(board, players, rng, wins = null, { chaosDelay = 0 } = {}) {
   const world = createWorld(board, rng, players[0].physics);
   if (board.triggerSlot !== null) world.closed.add(board.triggerSlot);
   players.forEach((player, i) => dropPlayer(world, player, i, player.x));
   // owners: slot -> the ball that claimed it.
   // trigger: when the trigger slot opened, and who pressed its button and when. It works once a
   // round, and its slot is covered again soon after.
-  return { world, players, wins: wins && new Set(wins), owners: new Map(), done: false, winners: null, trigger: { openAt: null, by: null, at: null } };
+  return { world, players, wins: wins && new Set(wins), owners: new Map(), done: false, winners: null, trigger: { landedAt: null, delay: chaosDelay, openAt: null, by: null, at: null } };
 }
 
 // Takes a ball off the board and drops it again from the top. It glows until it settles.
@@ -105,8 +106,8 @@ function claimSlots(round, emit) {
   else world.closed.delete(triggerSlot);
 }
 
-// The trigger slot starts shut under a lid. It opens once the first ball comes down onto the
-// floor of another slot. From then on any ball reaching its mouth presses the button, however it
+// The trigger slot starts shut under a lid. It opens chaosDelay seconds after the first ball comes
+// down onto the floor of another slot. From then on any ball reaching its mouth presses the button, however it
 // got there, once a round, and at that very moment every ball in every slot is thrown back up,
 // the one that pressed it too. Soon after, the slot is covered for the rest of the round.
 function pressTrigger(round, emit) {
@@ -115,7 +116,8 @@ function pressTrigger(round, emit) {
   const slot = board.triggerSlot;
   if (slot === null || trigger.by) return;
   if (trigger.openAt === null) {
-    if (!world.balls.some((b) => b.onFloor && !b.onLid && b.zone !== slot)) return;
+    if (trigger.landedAt === null && world.balls.some((b) => b.onFloor && !b.onLid && b.zone !== slot)) trigger.landedAt = world.time;
+    if (trigger.landedAt === null || world.time - trigger.landedAt < trigger.delay) return;
     trigger.openAt = world.time;
     emit({ type: 'open', slot });
   }

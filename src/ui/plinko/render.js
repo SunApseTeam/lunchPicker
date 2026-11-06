@@ -24,8 +24,9 @@ const LOSE = '#a7a49a';
 // that names the menu a winning slot is holding.
 // How far the side walls reach past the board when nothing wider stands above them.
 const HEDGE = 90;
-// Room under the waiting line for the members' names, above where thick walls begin.
-const NAME_ROOM = 46;
+// Room under the waiting line for the members' names and the menus they voted for, above where
+// thick walls begin.
+const NAME_ROOM = 72;
 
 // Measured in simulated rounds: knocks run from about 100 (a graze) to 1000+ (a straight drop
 // onto a peg), and the fastest tenth of falling is above 750.
@@ -694,6 +695,7 @@ export function createRenderer(canvas) {
       ctx.strokeText(spot.member.name, spot.x, spot.y + spot.r + 16);
       ctx.fillStyle = picked || !anyPicked ? INK : MUTED;
       ctx.fillText(spot.member.name, spot.x, spot.y + spot.r + 16);
+      if (picked) drawMenuTag(vote.menu, spot.x, spot.y + spot.r + 40, bench.step);
     }
     for (const said of bench.speeches) {
       const spot = spots.find((s) => s.member === said.member);
@@ -785,6 +787,25 @@ export function createRenderer(canvas) {
       ctx.quadraticCurveTo(x, y, x, y - size);
       ctx.fill();
     }
+  }
+
+  // The menu a waiting member voted for, on a little cream tag under their name, cut to fit
+  // between them and their neighbours.
+  function drawMenuTag(menu, x, y, room) {
+    ctx.font = '700 17px "IBM Plex Sans KR", sans-serif';
+    const label = fitText(`${menuIcon(menu)} ${menu.name}`, Math.max(60, room - 30));
+    const w = ctx.measureText(label).width + 20;
+    ctx.fillStyle = '#fffdf2';
+    ctx.strokeStyle = ACCENT;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(x - w / 2, y, w, 27, 13.5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = INK;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y + 14);
   }
 
   // The menu a ball stands for, on a round badge at its shoulder, with how many balls the member
