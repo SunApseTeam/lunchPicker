@@ -729,21 +729,49 @@ export function createRenderer(canvas) {
 
   // A picked member wears the same red ring and tick while falling as while waiting, so everyone
   // can follow the ones who count among the whole team tumbling down.
-  // A picked member wears a rainbow ring turning round them in a soft rainbow glow, and a check
-  // badge, on the line and all the way down.
+  // A picked member glows in soft, shifting light like a soap bubble: a halo that drifts slowly
+  // through the colours, a pale opal ring turning round them with a gleam running along it, and a
+  // check badge. On the line and all the way down.
+  const OPAL = [350, 25, 55, 120, 190, 250, 300, 350];
+  function opalStroke(cx, cy, turn, light, alpha) {
+    if (!ctx.createConicGradient) return `hsla(${(turn * 57) % 360}, 80%, ${light}%, ${alpha})`;
+    const g = ctx.createConicGradient(turn, cx, cy);
+    OPAL.forEach((h, i) => g.addColorStop(i / (OPAL.length - 1), `hsla(${h}, 80%, ${light}%, ${alpha})`));
+    return g;
+  }
   function drawPickMark(b, now) {
-    const segments = 24;
-    const turn = now * 2.2;
-    for (const [width, light, alpha] of [[16, 70, 0.3], [6, 56, 1]]) {
-      ctx.lineWidth = width;
-      for (let i = 0; i < segments; i++) {
-        const a = turn + (i / segments) * Math.PI * 2;
-        ctx.strokeStyle = `hsla(${(i / segments) * 360}, 95%, ${light}%, ${alpha})`;
-        ctx.beginPath();
-        ctx.arc(b.cx, b.cy, b.R + 8, a, a + (Math.PI * 2) / segments + 0.02);
-        ctx.stroke();
-      }
+    const r = b.R + 8;
+    const hue = (now * 35) % 360;
+    const halo = ctx.createRadialGradient(b.cx, b.cy, b.R, b.cx, b.cy, b.R + 30);
+    halo.addColorStop(0, `hsla(${hue}, 85%, 70%, 0.6)`);
+    halo.addColorStop(1, `hsla(${hue + 40}, 85%, 80%, 0)`);
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(b.cx, b.cy, b.R + 30, 0, Math.PI * 2);
+    ctx.arc(b.cx, b.cy, b.R, 0, Math.PI * 2, true);
+    ctx.fill();
+    const turn = now * 0.8;
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = opalStroke(b.cx, b.cy, turn, 66, 1);
+    ctx.beginPath();
+    ctx.arc(b.cx, b.cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.beginPath();
+    ctx.arc(b.cx, b.cy, r - 2, 0, Math.PI * 2);
+    ctx.stroke();
+    // The gleam: a short bright arc running round, fading at its ends.
+    const at = now * 2.4;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 6; i++) {
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.15 * (6 - i)})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.cx, b.cy, r, at - i * 0.07, at - i * 0.07 + 0.08);
+      ctx.stroke();
     }
+    ctx.lineCap = 'butt';
     const bx = b.cx + b.R * 0.72;
     const by = b.cy - b.R * 0.72;
     ctx.fillStyle = ACCENT;
