@@ -58,7 +58,9 @@ const CALM_TIME = 0.15;
 
 export const GEOMETRY = {
   // The widest board, used from six slots up. Fewer slots get a narrower one: see boardWidth.
-  width: 1200,
+  // Like every board it is a whole number of peg gaps plus a margin each side (2 x 129 + 5 x 190),
+  // or the lattice comes up short on the right.
+  width: 1208,
   gravity: 2400,
   // The band above the drop line holds the team's speech bubbles while they wait to drop.
   dropY: 170,
