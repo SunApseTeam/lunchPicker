@@ -14,6 +14,9 @@ const COVER_AFTER = 0.5;
 const DOWN_HOLD = 0.5;
 // How long the result waits for the others once every winning slot is taken.
 const STRAGGLER_WAIT = 3;
+// A ball dropped again is on its way from the top and takes longer than that: the result waits for
+// it to find a slot, up to this long, so a ball that keeps missing cannot hold the round up.
+const REDROP_WAIT = 20;
 
 const clearOf = (world, x, y, r) => world.balls.every((b) => Math.hypot(b.cx - x, b.cy - y) > b.R + r + 8);
 
@@ -140,7 +143,8 @@ export function stepRound(round, emit = () => {}) {
   // The result waits until every winning slot is taken, and then for the rest to come down: a
   // straggler landing late can still knock a winner out of its slot. It is called once everyone
   // has come to rest, once the ones still jostling in the slots have been down there a moment, or
-  // once the winners have held their slots a while, whatever the others are up to.
+  // once the winners have held their slots a while, whatever the others are up to, but never while
+  // a ball dropped again is still on its way.
   const { world, owners } = round;
   const time = world.time;
   const taken = round.wins ? [...round.wins].every((slot) => owners.has(slot)) : owners.size === round.players.length;
@@ -150,6 +154,7 @@ export function stepRound(round, emit = () => {}) {
     return;
   }
   round.decidedSince ??= time;
+  if (world.balls.some((b) => b.charged) && time - round.decidedSince < REDROP_WAIT) return;
   if (world.balls.every((b) => b.settled || b.zone !== null)) round.downSince ??= time;
   else round.downSince = null;
   const still = world.balls.every((b) => b.settled);
