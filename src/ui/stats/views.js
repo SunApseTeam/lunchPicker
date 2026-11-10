@@ -155,6 +155,14 @@ export function renderTimeline(days, { editing = null, menus = [], members = new
     .join('');
 }
 
+// Who to name on a record added by hand; the first choice names nobody.
+export function renderMemberOptions(members) {
+  return `<option value="">사람 지정 안 함</option>${[...members.values()]
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    .map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`)
+    .join('')}`;
+}
+
 // selected: the place already chosen, kept in the list even if it has since been hidden.
 export function renderMenuOptions(menus, selected = '') {
   return (

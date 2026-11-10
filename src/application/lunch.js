@@ -67,9 +67,10 @@ export function createLunchService(store, today) {
       return store.insertVisits(picks.map(({ menuId, memberId = null }) => ({ menuId, memberId, visitedOn: today(), source: 'spin' })));
     },
 
-    addManualVisit(menuId, visitedOn) {
+    // memberId: whose pick it was, if anyone's.
+    addManualVisit(menuId, visitedOn, memberId = null) {
       if (visitedOn > today()) throw new Error('앞으로의 날짜는 기록할 수 없어요');
-      return store.insertVisits([{ menuId, visitedOn, source: 'manual' }]);
+      return store.insertVisits([{ menuId, memberId, visitedOn, source: 'manual' }]);
     },
 
     // The place picked is not always the place gone to: a record can be moved to another place.

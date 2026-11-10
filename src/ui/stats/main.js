@@ -7,6 +7,7 @@ import {
   EMPTY,
   groupByDay,
   renderColumns,
+  renderMemberOptions,
   renderMenuOptions,
   renderRanking,
   renderStale,
@@ -66,6 +67,10 @@ async function render() {
   const keep = select.value;
   select.innerHTML = renderMenuOptions(menus);
   select.value = keep;
+  const who = $('#add-member');
+  const keepWho = who.value;
+  who.innerHTML = renderMemberOptions(members);
+  who.value = keepWho;
   const date = $('#add-date');
   date.max = todayString();
   if (!date.value) date.value = todayString();
@@ -120,9 +125,11 @@ $('#add-form').addEventListener('submit', (e) => {
   const date = $('#add-date').value;
   if (!menuId || !date) return;
   const name = $('#add-menu').selectedOptions[0].textContent;
+  const memberId = $('#add-member').value || null;
   attempt(async () => {
-    await lunch.addManualVisit(menuId, date);
+    await lunch.addManualVisit(menuId, date, memberId);
     $('#add-menu').value = '';
+    $('#add-member').value = '';
     toast(`${shortDate(date)} ${name} 추가했어요`);
   });
 });

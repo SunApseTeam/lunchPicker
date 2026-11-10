@@ -81,6 +81,15 @@ test('manual visits cannot be dated in the future', async () => {
   await lunch.addManualVisit(a.id, '2026-10-29');
 });
 
+test('a record added by hand can name whose pick it was, or nobody', async () => {
+  const { lunch, store } = setup();
+  const [a] = await lunch.listMenus();
+  await lunch.addManualVisit(a.id, '2026-10-29');
+  await lunch.addManualVisit(a.id, '2026-10-28', 'jungwon');
+  assert.deepEqual(store.visits.map((v) => [v.memberId ?? null, v.source]), [[null, 'manual'], ['jungwon', 'manual']]);
+  assert.deepEqual((await lunch.loadStats()).stats.winners.map((w) => [w.memberId, w.count]), [['jungwon', 1]]);
+});
+
 test('a canceled visit drops out of the stats and comes back when restored', async () => {
   const { lunch, store } = setup();
   const [a] = await lunch.listMenus();

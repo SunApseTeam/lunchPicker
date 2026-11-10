@@ -347,6 +347,30 @@ test('a ball left sitting on a lid, with nowhere to slide to, is dropped again, 
   assert.ok(round.world.balls[0].charged, 'glows on the way down');
 });
 
+test('the result waits for a ball dropped again to find a slot, however long the winners have held theirs', () => {
+  const board = createBoard(equalWidths(2), physics.radius, []);
+  const round = createRound(board, [{ physics, x: board.width * 0.25 }, { physics, x: board.width * 0.75 }], mulberry32(3));
+  // Hold the second ball up in the air, glowing as if on its way down again.
+  const [, late] = round.world.balls;
+  const held = late.pts.map((q) => ({ ...q }));
+  const hold = () => late.pts.forEach((q, i) => Object.assign(q, held[i]));
+  for (let i = 0; i < 30 / DT && round.owners.size === 0; i++) {
+    stepRound(round);
+    hold();
+  }
+  const [slot] = round.owners.keys();
+  round.wins = new Set([slot]);
+  late.charged = true;
+  for (let i = 0; i < 6 / DT; i++) {
+    stepRound(round);
+    hold();
+  }
+  assert.ok(!round.done, 'not called while it is still on its way');
+  for (let i = 0; i < 30 / DT && !round.done; i++) stepRound(round);
+  assert.ok(round.done, 'called once it has landed');
+  assert.ok(!late.charged, 'it had found a slot by then');
+});
+
 test('a ball comes to rest in the middle of its slot\'s bowl', () => {
   const board = createBoard(equalWidths(4), physics.radius, []);
   for (const [i, f] of [0.12, 0.4, 0.63, 0.88].entries()) {
