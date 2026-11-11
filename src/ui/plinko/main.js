@@ -5,6 +5,7 @@ import { createRound, stepAfter, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
 import { BALL, DEFAULT_SETTINGS } from '../../domain/settings.js';
 import { DEFAULT_TEAM, memberPhysics, parseMember } from '../../domain/team.js';
+import { recommend } from '../../domain/recommend.js';
 import { ballsOf, castVote, countVotes, dropVote, firstStage, maxWant, nextStage, tally, voteProblem } from '../../domain/votes.js';
 import { loadSettings, saveSettings } from '../../infrastructure/settings-storage.js';
 import { readSnapshot, writeSnapshot } from '../../infrastructure/snapshot.js';
@@ -239,6 +240,10 @@ async function confirmResult() {
   try {
     await lunch.recordPicks(picked.map(({ menuId, member }) => ({ menuId, memberId: member.id })));
     toast(`${picked.map(({ menuId }) => menuById(menuId).name).join(', ')} 기록 완료. 맛있게 드세요!`);
+    // Everyone's votes go with it, to learn what each member likes. Failing that is not worth
+    // undoing the lunch for.
+    await lunch.recordVotes([...votes].map(([memberId, v]) => ({ memberId, menuId: v.menuId, balls: v.count }))).catch(() => toast('투표 기록은 저장하지 못했어요', true));
+    loadHistory();
     backToIdle();
   } catch (err) {
     toast(err.message, true);
@@ -579,8 +584,24 @@ const votePicker = createVotePicker({
   },
 });
 
+// What the recommendations look at: the records and the votes kept so far, loaded in the
+// background and again after each lunch is confirmed. Until they are in, the suggestion goes by
+// the menus alone.
+let history = { visits: [], votes: [] };
+async function loadHistory() {
+  try {
+    const { visits, votes: kept } = await lunch.loadHistory();
+    history = { visits, votes: kept };
+  } catch {
+    // The suggestion just has less to go on.
+  }
+}
+
 function pickerState(member) {
-  return { menus, vote: votes.get(member.id) ?? null, tally: tally(votes, bench.order()), faceUrl: (m) => faces.url(m) };
+  // What the others have already voted for today, for the 합류 kind of suggestion.
+  const othersToday = [...votes].filter(([id]) => id !== member.id).map(([id, v]) => ({ name: bench.order().find((m) => m.id === id)?.name ?? '', menuId: v.menuId }));
+  const recommendation = recommend(member.id, { menus, visits: history.visits, votes: history.votes, today: todayString(), othersToday });
+  return { menus, vote: votes.get(member.id) ?? null, tally: tally(votes, bench.order()), faceUrl: (m) => faces.url(m), recommendation };
 }
 
 // Pressing a waiting member opens the window to pick their menu under their face, or closes it.
@@ -754,6 +775,7 @@ if (new URLSearchParams(location.search).has('debug')) {
     winners: () => phase.round?.winners ?? null,
     picked: () => (phase.picked ?? phase.next?.picked ?? phase.stage?.picked ?? []).map((p) => ({ menuId: p.menuId, member: p.member.id })),
     slots: () => slots.map((s) => s.kind),
+    keptVotes: () => history.votes.length,
     trigger: () => ({ slot: board.triggerSlot, opened: phase.round?.trigger.openAt ?? null, pressed: phase.round?.trigger.at ?? null }),
     said: () => (phase.stage?.balls ?? []).map((b) => bench.shoutOf(b.member, performance.now() / 1000)?.line ?? null),
   };
@@ -785,7 +807,7 @@ const showMenus = () => {
   renderMenus();
 };
 if (keptMenus) showMenus();
-loadMenus().then(showMenus);
+loadMenus().then(showMenus).then(loadHistory);
 
 // Fonts, photos and the logo are kept in this browser for the next visit (see sw.js).
 if ('serviceWorker' in navigator && mode !== 'demo') navigator.serviceWorker.register('sw.js').catch(() => {});

@@ -7,9 +7,17 @@ import { DEFAULT_MENUS } from '../src/domain/menu.js';
 function memoryStore() {
   const menus = [];
   const visits = [];
+  const votes = [];
   let n = 0;
   return {
     visits,
+    votes,
+    async listVotes() {
+      return votes.map((v) => ({ ...v }));
+    },
+    async insertVotes(rows) {
+      votes.push(...rows.map((r) => ({ id: `vote${++n}`, ...r, createdAt: `t${n}` })));
+    },
     async listMenus() {
       return menus.map((m) => ({ ...m }));
     },
@@ -72,6 +80,17 @@ test('a pick records who took the team there, and a record can be moved to the p
   assert.equal(store.visits[0].menuId, b.id);
   assert.equal(store.visits[0].memberId, 'jungwon', 'who took them there stays');
   await assert.rejects(lunch.changeVisitMenu(store.visits[0].id, 'nope'), /없는 가게/);
+});
+
+test('a confirmed round’s votes are kept, dated today, and come back with the history', async () => {
+  const { lunch, store } = setup();
+  const [a, b] = await lunch.listMenus();
+  await lunch.recordVotes([{ memberId: 'jungwon', menuId: a.id, balls: 2 }, { memberId: 'sungmin', menuId: b.id, balls: 1 }]);
+  await lunch.recordVotes([]);
+  assert.deepEqual(store.votes.map((v) => [v.memberId, v.menuId, v.balls, v.votedOn]), [['jungwon', a.id, 2, '2026-10-30'], ['sungmin', b.id, 1, '2026-10-30']]);
+  const history = await lunch.loadHistory();
+  assert.equal(history.votes.length, 2);
+  assert.ok(history.menus.length > 0 && Array.isArray(history.visits));
 });
 
 test('manual visits cannot be dated in the future', async () => {

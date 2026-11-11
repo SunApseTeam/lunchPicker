@@ -16,11 +16,11 @@ function load() {
 }
 
 export function createLocalStore() {
-  let state = load() ?? { menus: [], visits: [] };
+  let state = { votes: [], ...(load() ?? { menus: [], visits: [] }) };
   // The plinko page and the stats page may be open side by side; read the latest copy before
   // every change so one tab never saves over what the other just wrote.
   const fresh = () => {
-    state = load() ?? state;
+    state = { votes: [], ...(load() ?? state) };
   };
   const save = () => {
     try {
@@ -74,6 +74,15 @@ export function createLocalStore() {
       fresh();
       Object.assign(state.visits.find((v) => v.id === id), patch);
       save();
+    },
+    async listVotes() {
+      fresh();
+      return state.votes.map((v) => ({ ...v }));
+    },
+    async insertVotes(rows) {
+      fresh();
+      const createdAt = new Date().toISOString();
+      insert(state.votes, rows.map((r) => ({ id: newId(), ...r, createdAt })));
     },
   };
 }

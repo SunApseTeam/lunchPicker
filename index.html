@@ -13,6 +13,7 @@
   <link rel="modulepreload" href="src/domain/icon.js">
   <link rel="modulepreload" href="src/domain/menu.js">
   <link rel="modulepreload" href="src/domain/physics.js">
+  <link rel="modulepreload" href="src/domain/recommend.js">
   <link rel="modulepreload" href="src/domain/round.js">
   <link rel="modulepreload" href="src/domain/search.js">
   <link rel="modulepreload" href="src/domain/settings.js">
@@ -154,6 +155,31 @@
     #vote-picker header { display: flex; align-items: center; gap: 8px; }
     #vote-who { margin: 0; flex: 1; min-width: 0; font: 400 18px/1 "Black Han Sans", sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #vote-close { background: none; border: 0; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 6px; border-radius: 8px; }
+    #vote-rec[hidden] { display: none; }
+    #vote-rec .rec-card { position: relative; }
+    #vote-rec .rec {
+      display: grid; gap: 3px; width: 100%; padding: 10px 12px; text-align: left; border-radius: 14px;
+      background: linear-gradient(135deg, rgba(79, 209, 197, 0.16), rgba(90, 184, 255, 0.16)); border: 1px solid rgba(20, 184, 166, 0.45);
+    }
+    /* Each kind of suggestion in a colour of its own. */
+    #vote-rec .rec-explore .rec { background: linear-gradient(135deg, rgba(123, 211, 137, 0.2), rgba(181, 230, 85, 0.18)); border-color: rgba(76, 175, 80, 0.5); }
+    #vote-rec .rec-revisit .rec { background: linear-gradient(135deg, rgba(255, 179, 71, 0.18), rgba(255, 224, 102, 0.2)); border-color: rgba(217, 140, 30, 0.45); }
+    #vote-rec .rec-join .rec { background: linear-gradient(135deg, rgba(255, 138, 216, 0.16), rgba(195, 139, 255, 0.16)); border-color: rgba(176, 90, 200, 0.4); }
+    #vote-rec .rec-similar .rec { background: linear-gradient(135deg, rgba(140, 158, 255, 0.16), rgba(90, 184, 255, 0.16)); border-color: rgba(90, 110, 220, 0.4); }
+    #vote-rec .rec-next {
+      position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 3px;
+      background: rgba(255, 255, 255, 0.85); border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px;
+      font-size: 15px; line-height: 1; color: var(--text);
+    }
+    #vote-rec .rec-next small { font-size: 10px; color: var(--muted); }
+    #vote-rec .rec-next:hover { background: #fff; }
+    #vote-rec .rec-head { font-size: 12px; font-weight: 700; color: var(--mint-text, #0f766e); padding-right: 54px; }
+    #vote-rec .rec-pick { font: 400 20px/1.2 "Black Han Sans", sans-serif; display: flex; align-items: center; gap: 6px; }
+    #vote-rec .rec-why { font-size: 12px; color: var(--text); line-height: 1.45; }
+    #vote-rec .rec-note, #vote-rec .rec-stats { margin: 6px 2px 0; font-size: 11px; color: var(--muted); }
+    #vote-rec .rec-days { display: flex; gap: 4px; margin: 4px 0 0; }
+    #vote-rec .rec-days span { flex: 1; min-width: 0; text-align: center; font-size: 11px; color: var(--muted); background: var(--panel); border-radius: 8px; padding: 3px 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    #vote-rec .rec-days b { display: block; color: var(--text); }
     #vote-taken { display: flex; flex-direction: column; gap: 6px; }
     #vote-taken[hidden] { display: none; }
     #vote-taken button {
@@ -602,6 +628,7 @@
   </main>
   <div id="vote-picker" hidden role="dialog" aria-labelledby="vote-who">
     <header><h3 id="vote-who"></h3><button type="button" id="vote-clear" hidden>투표 취소</button><button type="button" id="vote-close" aria-label="닫기">×</button></header>
+    <div id="vote-rec" hidden></div>
     <div id="vote-taken"></div>
     <input id="vote-search" type="search" autocomplete="off" placeholder="메뉴 검색 · 초성 ㄱㅊ" aria-label="메뉴 검색">
     <ul id="vote-results"></ul>

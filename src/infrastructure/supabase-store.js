@@ -23,6 +23,8 @@ const toVisit = (r) => ({
   createdAt: r.created_at,
 });
 
+const toVote = (r) => ({ id: r.id, memberId: r.member_id, menuId: r.menu_id, balls: r.balls, votedOn: r.voted_on, createdAt: r.created_at });
+
 export function createSupabaseStore(url, key) {
   async function request(path, { method = 'GET', body, prefer } = {}) {
     let res;
@@ -87,6 +89,15 @@ export function createSupabaseStore(url, key) {
     },
     async listMembers() {
       return (await request('members?select=*&order=created_at.asc')).map(toMember);
+    },
+    async listVotes() {
+      return (await getAll('votes?select=*&order=voted_on.desc,created_at.desc')).map(toVote);
+    },
+    async insertVotes(rows) {
+      await request('votes', {
+        method: 'POST',
+        body: rows.map((r) => ({ member_id: r.memberId, menu_id: r.menuId, balls: r.balls, voted_on: r.votedOn })),
+      });
     },
   };
 }
