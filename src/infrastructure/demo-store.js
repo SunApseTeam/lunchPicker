@@ -3,7 +3,9 @@ import { DEFAULT_MENUS } from '../domain/menu.js';
 import { DEFAULT_TEAM } from '../domain/team.js';
 
 // Store port held in memory and filled with about six months of made-up lunches, for looking
-// at the stats screen before real records pile up. Nothing is saved; a reload starts over.
+// at the stats screen before real records pile up, and a few weeks of made-up votes, each member
+// leaning toward a couple of places and a favourite for some weekdays, for trying out the
+// recommendations. Nothing is saved; a reload starts over.
 const DAYS_BACK = 185;
 
 function sampleRows(today) {
@@ -44,11 +46,25 @@ function sampleRows(today) {
       });
     }
   }
-  return { menus, visits };
+  // Votes only for the last few weeks, as if they had only lately started being kept.
+  const votes = [];
+  const shown = menus.filter((m) => !m.hidden);
+  DEFAULT_TEAM.forEach((member, i) => {
+    const liked = [shown[i % shown.length], shown[(i * 3 + 1) % shown.length]];
+    for (let back = 30; back >= 1; back--) {
+      const day = new Date(today);
+      day.setDate(day.getDate() - back);
+      const weekday = day.getDay();
+      if (weekday === 0 || weekday === 6 || rng() < 0.35) continue;
+      const menu = weekday === 1 + (i % 5) ? liked[1] : rng() < 0.6 ? liked[0] : shown[Math.floor(rng() * shown.length)];
+      votes.push({ id: `demo-vote${votes.length}`, memberId: member.id, menuId: menu.id, balls: 1, votedOn: todayString(day), createdAt: `${todayString(day)}T03:00:00Z` });
+    }
+  });
+  return { menus, visits, votes };
 }
 
 export function createDemoStore() {
-  const { menus, visits } = sampleRows(new Date());
+  const { menus, visits, votes } = sampleRows(new Date());
   let n = 0;
   return {
     async listMembers() {
@@ -74,6 +90,13 @@ export function createDemoStore() {
     },
     async updateVisit(id, patch) {
       Object.assign(visits.find((v) => v.id === id), patch);
+    },
+    async listVotes() {
+      return votes.map((v) => ({ ...v }));
+    },
+    async insertVotes(rows) {
+      const createdAt = new Date().toISOString();
+      votes.push(...rows.map((r) => ({ id: `demo-new${++n}`, ...r, createdAt })));
     },
   };
 }

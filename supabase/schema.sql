@@ -105,3 +105,22 @@ update public.members set lines_trigger = array['어? 뭐 눌렀다','미안, �
 update public.members set lines_trigger = array['딸깍!','버튼은 못 참지','판 엎는다!'] where id = 'junhyuk' and lines_trigger is null;
 update public.members set lines_trigger = array['어머 눌렀어요','다시 섞어요~','뿅!'] where id = 'eunseol' and lines_trigger is null;
 update public.members set lines_trigger = array['스프링 발동!','숨은 기능이다','다들 조심~'] where id = 'beomgyu' and lines_trigger is null;
+
+-- Each confirmed round's votes: which menu every member who voted picked that day, and how many
+-- balls they put on it. Kept to learn what each member likes (see src/domain/recommend.js).
+-- Anyone may read and add; nobody edits or removes one.
+create table if not exists public.votes (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references public.members (id) on update cascade on delete cascade,
+  menu_id uuid not null references public.menus (id),
+  balls smallint not null default 1 check (balls between 1 and 3),
+  voted_on date not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists votes_member_day on public.votes (member_id, voted_on);
+alter table public.votes enable row level security;
+drop policy if exists "anon read votes" on public.votes;
+drop policy if exists "anon add votes" on public.votes;
+create policy "anon read votes" on public.votes for select to anon using (true);
+create policy "anon add votes" on public.votes for insert to anon with check (true);
+grant select, insert on public.votes to anon;

@@ -14,6 +14,8 @@ import { DEFAULT_TEAM, parseMember } from '../domain/team.js';
 //                             (memberId: who took the team there; null for older and hand-added ones)
 //   insertVisits(rows)        rows: [{ menuId, memberId?, visitedOn, source: 'spin' | 'manual' }]
 //   updateVisit(id, patch)    patch: { canceled } or { menuId }
+//   listVotes()               -> [{ id, memberId, menuId, balls, votedOn, createdAt }]
+//   insertVotes(rows)         rows: [{ memberId, menuId, balls, votedOn }]
 //   listMembers()             -> [{ id, name, color, scale, softness, bounce, lines, active }]
 //                             (lines: { pick, wait, drop, bounce, bump, win }, each a list of strings)
 //
@@ -65,6 +67,20 @@ export function createLunchService(store, today) {
     // splits up and goes to all of them. picks: [{ menuId, memberId? }].
     recordPicks(picks) {
       return store.insertVisits(picks.map(({ menuId, memberId = null }) => ({ menuId, memberId, visitedOn: today(), source: 'spin' })));
+    },
+
+    // The votes behind a confirmed round, kept to learn what each member likes: one row per member
+    // who voted. votes: [{ memberId, menuId, balls }].
+    recordVotes(votes) {
+      if (votes.length === 0) return Promise.resolve();
+      return store.insertVotes(votes.map(({ memberId, menuId, balls }) => ({ memberId, menuId, balls, votedOn: today() })));
+    },
+
+    // Everything a recommendation looks at. A store that cannot read votes (the table not made
+    // yet) still recommends from the records.
+    async loadHistory() {
+      const [menus, visits, votes] = await Promise.all([listMenus(), store.listVisits(), store.listVotes().catch(() => [])]);
+      return { menus, visits, votes };
     },
 
     // memberId: whose pick it was, if anyone's.

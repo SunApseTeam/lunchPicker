@@ -9,11 +9,14 @@ import { $, escapeHtml } from '../shared/dom.js';
 // right there and picked in one go, and a hidden place's name brings it back. ↑/↓ move through
 // the choices and Enter takes the one lit up, the first found by default. A member who has voted
 // can take the vote back (the red button at the top) or put more balls on their menu. On a phone
-// it is a sheet rising from the bottom.
+// it is a sheet rising from the bottom. At the top, a suggestion for this member worked out from
+// what they and the team picked before (domain/recommend.js), of the kind drawn for them today,
+// with why, and a short look at their picks: one press votes for it, and ↻ shows the next kind.
+// Where each member is in their suggestions is kept while the page is open.
 //
 // open(member, at, state): at is the face's centre and radius in page pixels; state is
-// { menus, vote, tally, faceUrl } with vote the member's own ({ menuId, count }) or null and
-// tally the voted menus as from votes.tally().
+// { menus, vote, tally, faceUrl, recommendation } with vote the member's own ({ menuId, count })
+// or null, tally the voted menus as from votes.tally() and recommendation as from recommend().
 export function createVotePicker({ onVote, onAdd, onRevive, onCount, onClear }) {
   const root = $('#vote-picker');
   const input = $('#vote-search');
@@ -44,11 +47,48 @@ export function createVotePicker({ onVote, onAdd, onRevive, onCount, onClear }) 
     return same.hidden ? { revive: same } : null;
   }
 
+  // A member is called by their given name: 성민님 for 박성민.
+  const callName = (m) => `${m.name.length === 3 ? m.name.slice(1) : m.name}님`;
+  const short = (m, max = 4) => (m.name.length > max ? `${m.name.slice(0, max)}…` : m.name);
+
+  // member id -> which of their suggestions is showing.
+  const shownRec = new Map();
+
+  function renderRecommendation(byId) {
+    const rec = state.recommendation;
+    const box = $('#vote-rec');
+    box.hidden = !rec?.options.length;
+    if (box.hidden) return;
+    const at = (shownRec.get(member.id) ?? 0) % rec.options.length;
+    const option = rec.options[at];
+    const m = byId.get(option.menuId);
+    const { picks, top, weekdays } = rec.summary;
+    const mine = state.vote?.menuId === m.id ? ' aria-pressed="true"' : '';
+    const habits = picks
+      ? `<p class="rec-stats">고른 기록 ${picks}번 · ${top.map((t) => `${escapeHtml(byId.get(t.menuId).name)} ${t.count}번`).join(' · ')}</p>
+         <p class="rec-days">${weekdays.map((d) => `<span><b>${d.label}</b>${d.menuId ? escapeHtml(short(byId.get(d.menuId))) : '–'}</span>`).join('')}</p>`
+      : '';
+    const next = rec.options.length > 1
+      ? `<button type="button" class="rec-next" data-rec-next title="다른 추천 보기" aria-label="다른 추천 보기 (${at + 1}/${rec.options.length})">↻ <small>${at + 1}/${rec.options.length}</small></button>`
+      : '';
+    box.innerHTML = `<div class="rec-card rec-${option.kind}">
+        <button type="button" data-choice data-menu="${m.id}" class="rec"${mine}>
+          <span class="rec-head">${escapeHtml(option.title)} · ${escapeHtml(callName(member))}께</span>
+          <span class="rec-pick"><span class="ico">${menuIcon(m)}</span>${escapeHtml(m.name)}</span>
+          <span class="rec-why">${option.reasons.map(escapeHtml).join('<br>')}</span>
+        </button>
+        ${next}
+      </div>
+      ${rec.note ? `<p class="rec-note">${escapeHtml(rec.note)}</p>` : ''}
+      ${habits}`;
+  }
+
   function render() {
     const { vote, tally, menus } = state;
     $('#vote-who').textContent = `${member.name}의 메뉴`;
     $('#vote-clear').hidden = !vote;
     const byId = new Map(menus.map((m) => [m.id, m]));
+    renderRecommendation(byId);
     const taken = tally.filter((t) => byId.has(t.menuId));
     $('#vote-taken').hidden = taken.length === 0;
     $('#vote-taken').innerHTML = taken
@@ -84,7 +124,7 @@ export function createVotePicker({ onVote, onAdd, onRevive, onCount, onClear }) 
   // While a name is typed, Enter takes the first thing it finds (or adds it); with nothing typed,
   // nothing until an arrow key picks something.
   function resetActive() {
-    active = query() ? root.querySelectorAll('#vote-taken [data-choice]').length : -1;
+    active = query() ? root.querySelectorAll('#vote-rec [data-choice], #vote-taken [data-choice]').length : -1;
     if (active >= choices().length) active = -1;
   }
 
@@ -144,6 +184,10 @@ export function createVotePicker({ onVote, onAdd, onRevive, onCount, onClear }) 
     const target = e.target instanceof Element ? e.target.closest('button') : null;
     if (!target || !member) return;
     if ('choice' in target.dataset) choose(target);
+    else if ('recNext' in target.dataset) {
+      shownRec.set(member.id, (shownRec.get(member.id) ?? 0) + 1);
+      render();
+    }
     else if (target.id === 'vote-less') onCount(member, -1);
     else if (target.id === 'vote-more') onCount(member, 1);
     else if (target.id === 'vote-clear') {

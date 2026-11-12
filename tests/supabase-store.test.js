@@ -32,6 +32,14 @@ test('rows come back in the app shape, read page by page', async () => {
   assert.equal(calls.length, 2);
 });
 
+test('votes are written and read in the table’s own column names', async () => {
+  const calls = fakeFetch((url, init) => (init.method === 'POST' ? new Response(null, { status: 201 }) : Response.json([{ id: 'x', member_id: 'sungmin', menu_id: 'm1', balls: 2, voted_on: '2026-11-11', created_at: 't' }])));
+  await store().insertVotes([{ memberId: 'sungmin', menuId: 'm1', balls: 2, votedOn: '2026-11-11' }]);
+  assert.equal(calls[0].url, 'https://x.supabase.co/rest/v1/votes');
+  assert.deepEqual(calls[0].body, [{ member_id: 'sungmin', menu_id: 'm1', balls: 2, voted_on: '2026-11-11' }]);
+  assert.deepEqual(await store().listVotes(), [{ id: 'x', memberId: 'sungmin', menuId: 'm1', balls: 2, votedOn: '2026-11-11', createdAt: 't' }]);
+});
+
 test('a duplicate name and a refused request become readable errors', async () => {
   fakeFetch(() => Response.json({ code: '23505' }, { status: 409 }));
   await assert.rejects(store().insertMenus([{ name: '국밥', tags: [] }]), /같은 이름/);
