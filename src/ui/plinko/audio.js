@@ -172,6 +172,19 @@ export function createAudio() {
       voice('sine', 90, 0.6, 0.45, now, 0, 45);
       thump(180, 0.5, 0.2, 0);
     },
+    // A vine caught: a rising whoosh. Let go: a falling one, a little brighter.
+    vine(action, x, boardWidth) {
+      if (muted || !ctx) return;
+      const now = ctx.currentTime;
+      const pan = (x / boardWidth) * 1.6 - 0.8;
+      if (action === 'grab') {
+        thump(700, 0.25, 0.18, pan);
+        voice('sine', 300, 0.22, 0.35, now, pan, 720);
+      } else {
+        thump(1500, 0.2, 0.12, pan);
+        voice('triangle', 900, 0.16, 0.3, now, pan, 420);
+      }
+    },
     win(count) {
       if (muted || !ctx) return;
       const at = ctx.currentTime + 0.05;

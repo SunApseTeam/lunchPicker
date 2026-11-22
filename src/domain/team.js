@@ -15,6 +15,7 @@ export const SITUATIONS = {
   bump: 'running into another falling member',
   win: 'over their slot on the result',
   trigger: 'pressing the spring trigger',
+  swing: 'catching a vine and swinging on it',
 };
 
 export const DEFAULT_TEAM = [
@@ -27,6 +28,7 @@ export const DEFAULT_TEAM = [
       bump: ['앗 죄송!', '부딪혔다!', '비켜 줘요~'],
       win: ['여기 좋다!', '내가 골랐어요', '가시죠!'],
       trigger: ['눌러 버렸다!', '이거 뭐예요?', '다 같이 튀어!'],
+      swing: ['아~아아~!', '타잔 출동!', '꽉 잡았다!'],
     },
   },
   { id: 'dongwon', name: '김동원', color: '#ffb347', scale: 0.95, softness: 0, bounce: 20,
@@ -38,6 +40,7 @@ export const DEFAULT_TEAM = [
       bump: ['밀지 마요!', '내 자리야!', '하이파이브!'],
       win: ['고기 맞죠?', '대박!', '잘 먹겠습니다'],
       trigger: ['스위치 발견!', '다 날아가라~', '꾹!'],
+      swing: ['우~아아~!', '정글의 왕!', '날아간다~'],
     },
   },
   { id: 'sungmin', name: '박성민', color: '#7bd389', scale: 1, softness: -40, bounce: -10,
@@ -49,6 +52,7 @@ export const DEFAULT_TEAM = [
       bump: ['어딜!', '안 밀려', '꿈쩍도 안 해'],
       win: ['든든하네', '좋습니다', '여기로 가죠'],
       trigger: ['어? 뭐 눌렀다', '미안, 내가 했어', '다시 섞자'],
+      swing: ['어어? 잡혔다', '줄 타기 성공', '으아아~'],
     },
   },
   { id: 'junhyuk', name: '손준혁', color: '#ff8ad8', scale: 0.9, softness: 0, bounce: 25,
@@ -60,6 +64,7 @@ export const DEFAULT_TEAM = [
       bump: ['통!', '같이 가요!', '나 먼저!'],
       win: ['면이다!', '됐다!', '빨리 가요!'],
       trigger: ['딸깍!', '버튼은 못 참지', '판 엎는다!'],
+      swing: ['야호~!', '줄 타는 맛!', '슝~!'],
     },
   },
   { id: 'eunseol', name: '조은설', color: '#c38bff', scale: 0.92, softness: 0, bounce: -10,
@@ -71,6 +76,7 @@ export const DEFAULT_TEAM = [
       bump: ['어머 죄송해요', '살살요!', '깜짝이야'],
       win: ['괜찮네요', '좋아요!', '디저트도 먹어요'],
       trigger: ['어머 눌렀어요', '다시 섞어요~', '뿅!'],
+      swing: ['꺄아~!', '덩굴이다!', '무서워요~'],
     },
   },
   { id: 'beomgyu', name: '최범규', color: '#4fd1c5', scale: 0.98, softness: -20, bounce: 10,
@@ -82,12 +88,13 @@ export const DEFAULT_TEAM = [
       bump: ['길 막지 마~', '충돌!', '하하 미안'],
       win: ['여기다!', '줄 없겠지?', '맛있겠다'],
       trigger: ['스프링 발동!', '숨은 기능이다', '다들 조심~'],
+      swing: ['아~아아~!', '덩굴 발견!', '점프!'],
     },
   },
 ];
 
 // Said when a member's row has no lines for a situation.
-const FALLBACK_LINES = { pick: ['저요!'], wait: ['배고파요'], drop: ['간다!'], bounce: ['으악!'], bump: ['앗!'], win: ['여기다!'], trigger: ['눌렀다!'] };
+const FALLBACK_LINES = { pick: ['저요!'], wait: ['배고파요'], drop: ['간다!'], bounce: ['으악!'], bump: ['앗!'], win: ['여기다!'], trigger: ['눌렀다!'], swing: ['아~아아~!', '타잔이다!', '꽉 잡아!'] };
 const COLOR = /^#[0-9a-f]{6}$/i;
 const clamp = (v, lo, hi, fallback) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback);
 

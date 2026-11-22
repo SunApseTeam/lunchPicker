@@ -4,7 +4,7 @@
 // each on their own clock, and the falling ones call out what happens to them.
 const GAP = 18;
 // How long a bubble stays up, by situation. A win line stays until the next round.
-const LIFE = { pick: 1.8, wait: 2.2, drop: 1.4, bounce: 1.1, bump: 1.1, win: Infinity, trigger: 1.8 };
+const LIFE = { pick: 1.8, wait: 2.2, drop: 1.4, bounce: 1.1, bump: 1.1, win: Infinity, trigger: 1.8, swing: 1.4 };
 // Lines said while standing on the drop line, as opposed to while falling.
 const ON_LINE = new Set(['pick', 'wait']);
 // Knocks come thick and fast, so a member calls one out at most this often.

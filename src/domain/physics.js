@@ -62,6 +62,44 @@ const HOMING_END = 3000;
 const FLOOR_FRICTION = 0.35;
 const LID_FRICTION = 0.02;
 
+// Vines, the 계곡 map's own feature. That map has no pegs or bumpers. Instead each round draws a
+// field of vines (randomVineField): short branches across the board with one to three vines draped
+// over each, a vine tip near each peg place below the top row, up to VINE_JITTER off it. The top
+// row stays clear, or every ball would catch a vine the moment it drops. Every vine is its own:
+// - length, within VINE_LENGTH, so the branches hang at different heights;
+// - sway: how far it swings either way in the wind (within VINE_SWAY), at its own pace (VINE_RATE);
+// - spring: how stiff it is (within VINE_SPRING): past its length it pulls back this hard per unit
+//   stretched, so a soft vine lets a ball sink and bob on it and a stiff one holds it almost like a
+//   rope. The bobbing dies down fast (VINE_DAMP of the stretching speed is lost each step), and it
+//   never stretches past VINE_STRETCH of its length;
+// - kick: how hard it throws (within VINE_KICK), scaling the push and the leap below.
+// A falling ball whose middle comes within VINE_CATCH of its radius to a tip catches it and swings
+// on it like Tarzan, pushed VINE_PUSH across toward the far side. Held at least VINE_GRIP, it lets
+// go once it has swung VINE_RELEASE radians past straight down, at the top of its swing or after
+// VINE_HOLD, and leaps off: VINE_FLING times its speed plus VINE_LEAP onward and upward, at most
+// VINE_LEAP_MOST fast and VINE_LEAP_UP upward, or a hard swing would throw it off the board. Then it
+// catches no vine for VINE_REST, and not the same one again for VINE_REGRAB, and none while rising.
+// In the endgame nobody catches a vine, so the last balls head straight for the slots.
+const VINE_LENGTH = [130, 270];
+const VINE_JITTER = { x: 40, y: 50 };
+const VINE_SWAY = [0.12, 0.42];
+const VINE_RATE = [0.6, 1.7];
+const VINE_SPRING = [400, 1500];
+const VINE_DAMP = 0.04;
+const VINE_STRETCH = 1.3;
+const VINE_KICK = [0.7, 1.35];
+const VINE_CATCH = 0.5;
+const VINE_PUSH = 350;
+const VINE_GRIP = 0.2;
+const VINE_RELEASE = 0.9;
+const VINE_HOLD = 1.6;
+const VINE_FLING = 1.15;
+const VINE_LEAP = { side: 300, up: 200 };
+const VINE_LEAP_MOST = 1100;
+const VINE_LEAP_UP = 700;
+const VINE_REST = 0.35;
+const VINE_REGRAB = 1.5;
+
 const SETTLE_RADIUS = 5;
 const SETTLE_TIME = 0.35;
 const SHAKE_RADIUS = 10;
@@ -196,11 +234,63 @@ export function randomBumpers(rng, width = GEOMETRY.width, rows = GEOMETRY.pegRo
   return best;
 }
 
-function buildPegs(g, width, bumpers) {
+const within = (rng, [lo, hi]) => lo + rng() * (hi - lo);
+
+// This round's vines, for the 계곡 map: { branches, vines }. Along each peg row below the top one,
+// the peg places are split into runs of one to three, each run a branch tilted a little at a height
+// of its own (branchTop says where its top is) with a vine draped over it for each place, hanging
+// to near the place. A branch never comes up into the drop line.
+export function randomVineField(rng, width = GEOMETRY.width, rows = GEOMETRY.pegRows) {
+  const g = GEOMETRY;
+  const branches = [];
+  const vines = [];
+  for (let row = 1; row < rows; row++) {
+    const y = g.pegTop + row * g.rowGap;
+    const places = pegColumns(width, row);
+    for (let i = 0; i < places.length; ) {
+      const xs = places.slice(i, i + 1 + Math.floor(rng() * 3)).map((x) => x + (rng() - 0.5) * VINE_JITTER.x);
+      i += xs.length;
+      const branch = { x0: xs[0] - 55, x1: xs.at(-1) + 55, mid: (xs[0] + xs.at(-1)) / 2, y: Math.max(g.dropY + 50, y - within(rng, VINE_LENGTH)), tilt: (rng() - 0.5) * 0.08 };
+      branches.push(branch);
+      for (const x of xs) {
+        const top = branchTop(branch, x);
+        vines.push({
+          x,
+          y: top,
+          length: y + (rng() - 0.5) * VINE_JITTER.y - top,
+          sway: within(rng, VINE_SWAY),
+          rate: within(rng, VINE_RATE),
+          phase: rng() * 2 * Math.PI,
+          spring: within(rng, VINE_SPRING),
+          kick: within(rng, VINE_KICK),
+        });
+      }
+    }
+  }
+  return { branches, vines };
+}
+
+// Where a branch's top is at x.
+export function branchTop(branch, x) {
+  return branch.y + branch.tilt * (x - branch.mid);
+}
+
+// How far a free vine hangs from straight down at time t, swaying in the wind, in radians.
+export function vineAngle(vine, t) {
+  return vine.sway * Math.sin(vine.rate * t + vine.phase);
+}
+
+function vineTip(vine, t) {
+  const a = vineAngle(vine, t);
+  return { x: vine.x + Math.sin(a) * vine.length, y: vine.y + Math.cos(a) * vine.length };
+}
+
+// plain: whether the pegs and bumpers are there; the wall bumps always are.
+function buildPegs(g, width, bumpers, plain) {
   const pegs = [];
   for (let row = 0; row < g.pegRows; row++) {
     const y = g.pegTop + row * g.rowGap;
-    for (const x of pegColumns(width, row)) {
+    for (const x of plain ? pegColumns(width, row) : []) {
       const bumper = bumpers.some((b) => b.row === row && b.x === x);
       pegs.push({ x, y, r: bumper ? g.bumperRadius : g.pegRadius, kind: bumper ? 'bumper' : 'peg' });
     }
@@ -218,8 +308,9 @@ export const FIXED_BUMPERS = [
 ];
 
 // triggerSlot: which slot is the spring trigger's, or none. See slotWidthsWithTrigger. rows: how
-// many peg rows; more make the drop longer, the slots lower down and the board taller.
-export function createBoard(slotWidths, radius = BALL.size, bumpers = FIXED_BUMPERS, triggerSlot = null, rows = GEOMETRY.pegRows) {
+// many peg rows; more make the drop longer, the slots lower down and the board taller. vineField:
+// the 계곡 map's vines from randomVineField, in place of the pegs and bumpers, or none.
+export function createBoard(slotWidths, radius = BALL.size, bumpers = FIXED_BUMPERS, triggerSlot = null, rows = GEOMETRY.pegRows, vineField = null) {
   const g = { ...GEOMETRY, pegRows: rows };
   const width = boardWidth(slotWidths.length);
   const total = slotWidths.reduce((a, b) => a + b, 0);
@@ -232,7 +323,7 @@ export function createBoard(slotWidths, radius = BALL.size, bumpers = FIXED_BUMP
   // Dividers are lower than a ball is tall, in proportion to it, so balls of every size can
   // bounce over them about as often.
   const dividerTop = floorY - radius * DIVIDER_PER_RADIUS;
-  const pegs = buildPegs(g, width, bumpers);
+  const pegs = buildPegs(g, width, bumpers, !vineField);
   const caps = dividers.map((x) => ({ x, y: dividerTop, r: g.dividerHalfWidth, kind: 'divider' }));
   return {
     ...g,
@@ -250,6 +341,8 @@ export function createBoard(slotWidths, radius = BALL.size, bumpers = FIXED_BUMP
     slotEdges,
     dividers,
     triggerSlot,
+    vines: vineField?.vines ?? [],
+    branches: vineField?.branches ?? [],
   };
 }
 
@@ -297,8 +390,10 @@ export function slotAt(board, x) {
 }
 
 export function createWorld(board, rng, physics = physicsFrom(BALL)) {
-  // closed: empty slots with a lid over them. The round decides which.
-  return { board, rng, physics, time: 0, balls: [], nextId: 1, touching: new Set(), closed: new Set(), endgame: false };
+  // closed: empty slots with a lid over them. The round decides which. vines: one per board vine,
+  // with the ball swinging on it, if any (see swingVines).
+  const vines = board.vines.map((vine) => ({ vine, ball: null, dir: 0, since: 0, taut: false }));
+  return { board, rng, physics, time: 0, balls: [], nextId: 1, touching: new Set(), closed: new Set(), endgame: false, vines };
 }
 
 // A closed slot has a lid just above the divider tops: a ball coming down onto it lands there as
@@ -743,6 +838,97 @@ function slotBounces(world, emit) {
   }
 }
 
+// A vine stretched past its length pulls the ball on it back toward where it is tied, as hard as
+// the vine is stiff and as far as it is stretched, and soaks up part of the stretching speed.
+function pullOnVines(world) {
+  for (const v of world.vines) {
+    const b = v.ball;
+    if (!b) continue;
+    const dx = b.cx - v.vine.x;
+    const dy = b.cy - v.vine.y;
+    const d = Math.hypot(dx, dy);
+    if (d <= v.vine.length) continue;
+    const outward = (b.vx * dx + b.vy * dy) / d;
+    const k = (v.vine.spring * (d - v.vine.length) * DT * DT + VINE_DAMP * outward * DT) / d;
+    for (const p of b.pts) {
+      p.x -= dx * k;
+      p.y -= dy * k;
+    }
+  }
+}
+
+// The vine's last stretch: a ball on it never gets farther than VINE_STRETCH of its length from
+// where it is tied. Only the positions move, so the pull turns its velocity into the swing.
+function holdOnVines(world) {
+  for (const v of world.vines) {
+    const b = v.ball;
+    if (!b) continue;
+    centroid(b);
+    const dx = b.cx - v.vine.x;
+    const dy = b.cy - v.vine.y;
+    const d = Math.hypot(dx, dy);
+    const most = v.vine.length * VINE_STRETCH;
+    if (d <= most) continue;
+    const k = (d - most) / d;
+    for (const p of b.pts) {
+      p.x -= dx * k;
+      p.y -= dy * k;
+    }
+    b.cx -= dx * k;
+    b.cy -= dy * k;
+  }
+}
+
+// A free vine is caught by a falling ball that reaches its tip, which is pushed across to swing
+// over to the side it did not come from. Once the vine is taut under it, a swinging ball lets go
+// on the far upswing or at the top of its swing, or when it has held on long enough, and leaps on.
+function swingVines(world, emit) {
+  const now = world.time;
+  for (const v of world.vines) {
+    const { vine } = v;
+    if (v.ball && !world.balls.includes(v.ball)) v.ball = null;
+    const b = v.ball;
+    if (b) {
+      const dx = b.cx - vine.x;
+      const dy = b.cy - vine.y;
+      const d = Math.hypot(dx, dy) || 1e-6;
+      if (d > vine.length * 0.95) v.taut = true;
+      const swung = v.dir * Math.atan2(dx, dy);
+      const along = (v.dir * (b.vx * dy - b.vy * dx)) / d;
+      const held = now - v.since;
+      const far = v.taut && swung > VINE_RELEASE && along > 0;
+      const top = v.taut && along < 0;
+      if (held < VINE_GRIP || (!far && !top && held < VINE_HOLD)) continue;
+      const vx = b.vx * VINE_FLING + v.dir * VINE_LEAP.side * vine.kick;
+      const vy = Math.max(-VINE_LEAP_UP, b.vy * VINE_FLING - VINE_LEAP.up * vine.kick);
+      const slow = Math.min(1, VINE_LEAP_MOST / Math.hypot(vx, vy));
+      setVelocity(b, vx * slow, vy * slow);
+      b.vine = null;
+      b.lastVine = vine;
+      b.vineAt = now;
+      v.ball = null;
+      emit({ type: 'vine', action: 'release', ball: b, vine, angle: Math.atan2(dx, dy) });
+      continue;
+    }
+    if (world.endgame) continue;
+    const tip = vineTip(vine, now);
+    const caught = world.balls.find(
+      (o) =>
+        !o.vine &&
+        o.zone === null &&
+        o.vy > 0 &&
+        !(now - o.vineAt < (o.lastVine === vine ? VINE_REGRAB : VINE_REST)) &&
+        Math.hypot(o.cx - tip.x, o.cy - tip.y) < o.R * VINE_CATCH,
+    );
+    if (!caught) continue;
+    const dir = -Math.sign(caught.cx - tip.x) || Math.sign(caught.vx) || (world.rng() < 0.5 ? -1 : 1);
+    setVelocity(caught, caught.vx + dir * VINE_PUSH * vine.kick, caught.vy);
+    Object.assign(v, { ball: caught, dir, since: now, taut: false });
+    caught.vine = v;
+    emit({ type: 'vine', action: 'grab', ball: caught, vine });
+  }
+}
+
 function updateBall(world, b, emit) {
   const { board, rng } = world;
   const now = world.time;
@@ -867,10 +1053,12 @@ export function stepWorld(world, emit = () => {}) {
       p.y += vy + board.gravity * DT * DT;
     }
   }
+  pullOnVines(world);
   for (let k = 0; k < ITER; k++) {
     for (const b of world.balls) constrain(b, b.phys);
     for (const b of world.balls) centroid(b);
     collideBalls(world);
+    holdOnVines(world);
     // Static obstacles get the last word: a neighbour shoving skin into a peg must not stick.
     for (const b of world.balls) collideStatic(world, b);
   }
@@ -905,6 +1093,7 @@ export function stepWorld(world, emit = () => {}) {
   assignZones(world);
   slotBounces(world, emit);
   for (const b of world.balls) updateBall(world, b, emit);
+  swingVines(world, emit);
 }
 
 export function mulberry32(seed) {
