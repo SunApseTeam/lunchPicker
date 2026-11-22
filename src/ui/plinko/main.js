@@ -1,6 +1,6 @@
 import { createLunchService } from '../../application/lunch.js';
 import { todayString } from '../../domain/date.js';
-import { DT, boardWidth, createBoard, maxSlots, mulberry32, randomBumpers, slotWidthsWithTrigger } from '../../domain/physics.js';
+import { DT, boardWidth, createBoard, maxSlots, mulberry32, randomBumpers, randomVineField, slotWidthsWithTrigger } from '../../domain/physics.js';
 import { createRound, stepAfter, stepRound } from '../../domain/round.js';
 import { menuIcon } from '../../domain/icon.js';
 import { BALL, DEFAULT_SETTINGS } from '../../domain/settings.js';
@@ -18,7 +18,7 @@ import { createFaces } from './faces.js';
 import { createIconPicker } from './icon-picker.js';
 import { createMenuPanel } from './menu-panel.js';
 import { SLOT_COLORS, createRenderer } from './render.js';
-import { THEMES } from './themes/index.js';
+import { THEMES, themeById } from './themes/index.js';
 import { createSettingsDialog } from './settings-dialog.js';
 import { createStatsPanel } from './stats-panel.js';
 import { createTagEditor } from './tag-editor.js';
@@ -93,15 +93,17 @@ let board = null;
 // 칸 섞기 draws a new one.
 let bumperSeed = Math.random() * 2 ** 32;
 let slotSeed = Math.random() * 2 ** 32;
-// n slots for the balls, k of them winning, with the trigger slot slipped in among them.
+// n slots for the balls, k of them winning, with the trigger slot slipped in among them. A map
+// with a feature of its own (the 계곡's vines in place of the pegs) draws it for the board too.
 function layOut(n, k) {
   const rng = mulberry32(bumperSeed);
   const bumpers = randomBumpers(rng, boardWidth(n + 1), settings.rows);
+  const field = themeById(settings.theme).feature === 'vines' ? randomVineField(rng, boardWidth(n + 1), settings.rows) : null;
   const draw = mulberry32(slotSeed);
   const at = Math.floor(draw() * (n + 1));
   const kinds = shuffle(Array.from({ length: n }, (_, i) => (k === 0 ? 'wait' : i < k ? 'win' : 'lose')), draw);
   slots = [...kinds.slice(0, at), 'trigger', ...kinds.slice(at)].map((kind) => ({ kind }));
-  board = createBoard(slotWidthsWithTrigger(n, BALL.size, at), BALL.size, bumpers, at, settings.rows);
+  board = createBoard(slotWidthsWithTrigger(n, BALL.size, at), BALL.size, bumpers, at, settings.rows, field);
 }
 layOut(2, 0);
 
@@ -289,6 +291,9 @@ function onEngineEvent(event) {
     bench.shout(who(event.ball), 'trigger', now);
   } else if (event.type === 'spring') {
     audio.spring();
+  } else if (event.type === 'vine') {
+    audio.vine(event.action, event.ball.cx, board.width);
+    if (event.action === 'grab') bench.shout(who(event.ball), 'swing', now);
   } else if (event.type === 'claim' && event.win && phase.round.wins) {
     // Into a winning slot: a burst of colour over it.
     renderer.celebrate(board, [event.slot]);
@@ -502,14 +507,15 @@ const tagEditor = createTagEditor({
 });
 
 function applySettings(next) {
-  const rowsChanged = next.rows !== settings.rows;
+  const boardChanged = next.rows !== settings.rows || themeById(next.theme).feature !== themeById(settings.theme).feature;
   settings = next;
   saveSettings(settings);
   audio.setMuted(!settings.sound);
   renderer.setTheme(settings.theme);
   renderThemes();
-  // A longer or shorter drop needs a new board; one in play keeps its own until the next round.
-  if (rowsChanged) rebuildBoard();
+  // A longer or shorter drop, or a map with other features, needs a new board; one in play keeps
+  // its own until the next round.
+  if (boardChanged) rebuildBoard();
   settingsDialog.render();
   renderControls();
 }
@@ -777,6 +783,7 @@ if (new URLSearchParams(location.search).has('debug')) {
     slots: () => slots.map((s) => s.kind),
     keptVotes: () => history.votes.length,
     trigger: () => ({ slot: board.triggerSlot, opened: phase.round?.trigger.openAt ?? null, pressed: phase.round?.trigger.at ?? null }),
+    swinging: () => (phase.round?.world.vines ?? []).filter((v) => v.ball).length,
     said: () => (phase.stage?.balls ?? []).map((b) => bench.shoutOf(b.member, performance.now() / 1000)?.line ?? null),
   };
 }

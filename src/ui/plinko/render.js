@@ -6,6 +6,7 @@ import { createGround } from './ground.js';
 import { BUTTON, createSpringFx } from './spring-fx.js';
 import { hexToRgba } from './themes/art.js';
 import { themeById } from './themes/index.js';
+import { createVines } from './vines.js';
 
 export const SLOT_COLORS = [
   '#ff6b6b', '#ffb347', '#ffe066', '#7bd389', '#4fd1c5', '#5ab8ff',
@@ -39,6 +40,7 @@ export function createRenderer(canvas) {
   const camera = createCamera();
   const ground = createGround();
   const fx = createSpringFx(ctx);
+  const vines = createVines(ctx);
   let theme = themeById('meadow');
   const flash = new Map();
   // slot -> when its lid started closing, so the lid can slide shut.
@@ -91,6 +93,11 @@ export function createRenderer(canvas) {
       if (event.target?.pts) hurt(event.target, event.speed, now);
       if (event.target) flash.set(event.target, now);
       if (event.kind === 'bumper') burst(event.target.x, event.target.y, theme.glow, 20, 520);
+    } else if (event.type === 'vine') {
+      // Leaves fly off as a ball catches a vine or lets go of it.
+      vines.onEvent(event, now);
+      burst(event.ball.cx, event.ball.cy, '#7cc04f', event.action === 'grab' ? 16 : 12, 420);
+      burst(event.ball.cx, event.ball.cy, '#d4f2a0', 8, 300);
     } else if (event.type === 'redrop') {
       burst(event.ball.cx, event.ball.cy, MUTED, 24, 320);
     } else if (event.type === 'open' && board) {
@@ -314,6 +321,7 @@ export function createRenderer(canvas) {
         else theme.peg(ctx, peg, glow);
       });
     }
+    vines.draw(board, world, now);
     drawRipples(now);
   }
 
